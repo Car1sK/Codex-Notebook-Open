@@ -4,7 +4,11 @@ Guidance for agents working in this workspace.
 
 ## Workspace Layout
 
-This parent workspace contains three GitHub repositories:
+This root is a private meta Git repository for the integration layer:
+
+<https://github.com/Alasyoki/Codex-Notebook-Open>
+
+It contains three embedded upstream Git repositories that remain independent and are ignored by the root `.gitignore`:
 
 | Directory | Purpose |
 |---|---|
@@ -48,6 +52,14 @@ Default workflow:
 4. Timeout, no response, malformed handoff, missing changes, failed verification, or rejection after repair returns ownership to Codex immediately.
 5. Codex does not duplicate a successful implementation. It reviews the saved gate artifacts, working-tree diff, repository rules, and verification evidence, then runs the narrowest independent check proportional to risk.
 6. Codex reports the assigned classification, completed phases, changed files, accepted or rejected work, and both layers of verification.
+
+WorkDir selection is part of the safety boundary:
+
+- Use `D:\applyandcreate\workplace\OpenNotebookLM` only for root integration-layer files.
+- Use `D:\applyandcreate\workplace\OpenNotebookLM\Hermes_agent` for Hermes Agent changes.
+- Use `D:\applyandcreate\workplace\OpenNotebookLM\notebooklm-py` for NotebookLM bridge changes.
+- Use `D:\applyandcreate\workplace\OpenNotebookLM\opennotebook` for Open Notebook application changes.
+- Do not use root `AllowedPaths` such as `.`, `./`, or repository root; pass explicit files or directories.
 
 Good delegation candidates:
 

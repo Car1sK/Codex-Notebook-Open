@@ -2,6 +2,10 @@
 
 Root meta repository for the local Open Notebook + notebooklm-py + Hermes integration layer.
 
+Private GitHub remote:
+
+<https://github.com/Alasyoki/Codex-Notebook-Open>
+
 Normal user entrypoint:
 
 ```bat
@@ -27,3 +31,8 @@ The upstream project folders are intentionally kept as independent repositories 
 See `REPOSITORIES.md` for their remotes and current local commit pins.
 
 Never commit local secrets, runtime data, virtual environments, `node_modules`, logs, or Open Notebook database files.
+
+For Codex -> Hermes delegation:
+
+- Use this root repository as `WorkDir` only for integration-layer files such as launchers, root scripts, HTML guides, `AGENTS.md`, `README.md`, and `REPOSITORIES.md`.
+- Use the matching embedded repository as `WorkDir` when changing `Hermes_agent/`, `notebooklm-py/`, or `opennotebook/`.
