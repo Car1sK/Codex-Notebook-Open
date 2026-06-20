@@ -14,6 +14,8 @@ set "DB_LOG=%DATA_ROOT%\database.log"
 set "WORKER_LOG=%DATA_ROOT%\worker.log"
 set "FRONTEND_LOG=%DATA_ROOT%\frontend.log"
 set "LAUNCH_LOCK=%DATA_ROOT%\launcher.lock"
+set "BACKEND_LOCK=%DATA_ROOT%\backend.lock"
+set "FRONTEND_LOCK=%DATA_ROOT%\frontend.lock"
 
 if /i "%~1"=="backend" goto :backend
 if /i "%~1"=="frontend" goto :frontend
@@ -108,12 +110,32 @@ if not errorlevel 1 (
   exit /b 0
 )
 
+call :acquire_backend_lock
+if errorlevel 1 (
+  echo [Open Notebook] Another backend start is already in progress; waiting for port 5055.
+  call :wait_for_port 5055 120
+  if errorlevel 1 (
+    echo ERROR: Existing backend startup did not expose the backend/API on port 5055.
+    exit /b 1
+  )
+  echo [Open Notebook] Backend/API is already running on port 5055; no new backend started.
+  exit /b 0
+)
+set "BACKEND_LOCK_ACQUIRED=1"
+
 call :resolve_surreal
-if errorlevel 1 exit /b 1
+if errorlevel 1 goto :backend_failed
 call "%PYTHON_EXE%" "%WORKSPACE%scripts\ensure_open_notebook_env.py" "%ENV_FILE%"
-if errorlevel 1 exit /b 1
+if errorlevel 1 goto :backend_failed
 call :load_env
-if errorlevel 1 exit /b 1
+if errorlevel 1 goto :backend_failed
+
+powershell.exe -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $r=$c.BeginConnect('127.0.0.1',5055,$null,$null); if ($r.AsyncWaitHandle.WaitOne(750,$false)) { $c.EndConnect($r); exit 0 }; exit 1 } catch { exit 1 } finally { $c.Close() }" >nul 2>nul
+if not errorlevel 1 (
+  echo [Open Notebook] Backend/API is already running on port 5055; no new backend started.
+  call :release_backend_lock
+  exit /b 0
+)
 
 if not exist "%DATA_ROOT%" mkdir "%DATA_ROOT%"
 if not exist "%DB_ROOT%" mkdir "%DB_ROOT%"
@@ -132,13 +154,19 @@ if not errorlevel 1 (
   call :wait_for_port 8000 60
   if errorlevel 1 (
     echo ERROR: SurrealDB did not become ready. Check "%DB_LOG%".
-    exit /b 1
+    goto :backend_failed
   )
 )
 
 start "" /b "%PYTHON_EXE%" -m surreal_commands.cli.worker --import-modules commands >"%WORKER_LOG%" 2>&1
 "%PYTHON_EXE%" run_api.py
-exit /b %errorlevel%
+set "BACKEND_EXIT=%errorlevel%"
+call :release_backend_lock
+exit /b %BACKEND_EXIT%
+
+:backend_failed
+call :release_backend_lock
+exit /b 1
 
 :frontend
 title Open Notebook - Frontend
@@ -148,9 +176,29 @@ if not errorlevel 1 (
   echo [Open Notebook] Frontend is already running on port 3000; no new frontend started.
   exit /b 0
 )
+call :acquire_frontend_lock
+if errorlevel 1 (
+  echo [Open Notebook] Another frontend start is already in progress; waiting for port 3000.
+  call :wait_for_port 3000 120
+  if errorlevel 1 (
+    echo ERROR: Existing frontend startup did not expose the frontend on port 3000.
+    exit /b 1
+  )
+  echo [Open Notebook] Frontend is already running on port 3000; no new frontend started.
+  exit /b 0
+)
+set "FRONTEND_LOCK_ACQUIRED=1"
+powershell.exe -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $r=$c.BeginConnect('127.0.0.1',3000,$null,$null); if ($r.AsyncWaitHandle.WaitOne(750,$false)) { $c.EndConnect($r); exit 0 }; exit 1 } catch { exit 1 } finally { $c.Close() }" >nul 2>nul
+if not errorlevel 1 (
+  echo [Open Notebook] Frontend is already running on port 3000; no new frontend started.
+  call :release_frontend_lock
+  exit /b 0
+)
 cd /d "%FRONTEND%"
 call npm.cmd run dev >"%FRONTEND_LOG%" 2>&1
-exit /b %errorlevel%
+set "FRONTEND_EXIT=%errorlevel%"
+call :release_frontend_lock
+exit /b %FRONTEND_EXIT%
 
 :resolve_surreal
 set "SURREAL_EXE="
@@ -176,6 +224,38 @@ exit /b 1
 :release_launcher_lock
 if defined LOCK_ACQUIRED if exist "%LAUNCH_LOCK%" rmdir "%LAUNCH_LOCK%" >nul 2>nul
 set "LOCK_ACQUIRED="
+exit /b 0
+
+:acquire_backend_lock
+if not exist "%DATA_ROOT%" mkdir "%DATA_ROOT%"
+mkdir "%BACKEND_LOCK%" >nul 2>nul
+if not errorlevel 1 exit /b 0
+powershell.exe -NoProfile -Command "$p=$env:BACKEND_LOCK; if ((Test-Path -LiteralPath $p) -and ((Get-Date) - (Get-Item -LiteralPath $p).LastWriteTime).TotalMinutes -gt 15) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; exit 0 }; exit 1" >nul 2>nul
+if not errorlevel 1 (
+  mkdir "%BACKEND_LOCK%" >nul 2>nul
+  if not errorlevel 1 exit /b 0
+)
+exit /b 1
+
+:release_backend_lock
+if defined BACKEND_LOCK_ACQUIRED if exist "%BACKEND_LOCK%" rmdir "%BACKEND_LOCK%" >nul 2>nul
+set "BACKEND_LOCK_ACQUIRED="
+exit /b 0
+
+:acquire_frontend_lock
+if not exist "%DATA_ROOT%" mkdir "%DATA_ROOT%"
+mkdir "%FRONTEND_LOCK%" >nul 2>nul
+if not errorlevel 1 exit /b 0
+powershell.exe -NoProfile -Command "$p=$env:FRONTEND_LOCK; if ((Test-Path -LiteralPath $p) -and ((Get-Date) - (Get-Item -LiteralPath $p).LastWriteTime).TotalMinutes -gt 15) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; exit 0 }; exit 1" >nul 2>nul
+if not errorlevel 1 (
+  mkdir "%FRONTEND_LOCK%" >nul 2>nul
+  if not errorlevel 1 exit /b 0
+)
+exit /b 1
+
+:release_frontend_lock
+if defined FRONTEND_LOCK_ACQUIRED if exist "%FRONTEND_LOCK%" rmdir "%FRONTEND_LOCK%" >nul 2>nul
+set "FRONTEND_LOCK_ACQUIRED="
 exit /b 0
 
 :generate_key

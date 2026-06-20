@@ -206,7 +206,11 @@ def check_open_notebook_single_instance_guard() -> None:
 
     required_bat_markers = [
         "launcher.lock",
+        "backend.lock",
+        "frontend.lock",
         "Another launcher is already starting Open Notebook; waiting for the existing startup.",
+        "Another backend start is already in progress; waiting for port 5055.",
+        "Another frontend start is already in progress; waiting for port 3000.",
         "Backend/API is already running on port 5055; reusing it.",
         "Frontend is already running on port 3000; reusing it.",
         "Backend/API is already running on port 5055; no new backend started.",
