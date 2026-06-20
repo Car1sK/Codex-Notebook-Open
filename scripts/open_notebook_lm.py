@@ -514,20 +514,111 @@ def run_check() -> int:
 
 
 # ---------------------------------------------------------------------------
+# Windows helpers
+# ---------------------------------------------------------------------------
+
+_WINDOWS_EXTRA_PATHS = [
+    r"%APPDATA%\Python\Python313\Scripts",
+    r"%USERPROFILE%\.local\bin",
+    r"%USERPROFILE%\.cargo\bin",
+    r"C:\nvm4w\nodejs",
+    r"C:\Program Files\nodejs",
+    r"%LOCALAPPDATA%\Programs\Ollama",
+]
+
+_WINGET_PACKAGES: dict[str, tuple[str, str]] = {
+    "node": ("OpenJS.NodeJS.LTS", "Node.js LTS"),
+    "surreal": ("SurrealDB.SurrealDB", "SurrealDB"),
+    "ollama": ("Ollama.Ollama", "Ollama"),
+}
+
+
+def _prepare_windows_path() -> None:
+    """Add common Windows tool directories to PATH."""
+    added: list[str] = []
+    for raw in _WINDOWS_EXTRA_PATHS:
+        expanded = os.path.expandvars(raw)
+        if os.path.isdir(expanded) and expanded not in os.environ.get("PATH", ""):
+            added.append(expanded)
+    if added:
+        os.environ["PATH"] = os.pathsep.join(added) + os.pathsep + os.environ.get("PATH", "")
+
+
+def _ensure_windows_tools() -> None:
+    """Check and optionally install external tools on Windows via winget."""
+    print("[Setup] Checking external tools...")
+    tools = check_tools()
+
+    # uv - try PowerShell install if missing
+    if tools["uv"] is None:
+        print("[Setup] uv not found. Installing uv...")
+        result = subprocess.run(
+            [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-Command", "irm https://astral.sh/uv/install.ps1 | iex",
+            ],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode != 0:
+            print("WARNING: uv installation failed.", file=sys.stderr)
+            print(TOOL_INSTALL_INSTRUCTIONS["uv"])
+        else:
+            _prepare_windows_path()
+            tools["uv"] = which("uv")
+
+    # node, surreal, ollama - winget
+    for tool, (winget_id, label) in _WINGET_PACKAGES.items():
+        if tools[tool] is not None:
+            continue
+        print(f"[Setup] {label} not found. Installing {label} with winget...")
+        winget_path = which("winget")
+        if winget_path is None:
+            print(f"WARNING: winget is not available; cannot install {label} automatically.", file=sys.stderr)
+            if tool in TOOL_INSTALL_INSTRUCTIONS:
+                print(TOOL_INSTALL_INSTRUCTIONS[tool])
+            continue
+
+        result = subprocess.run(
+            [
+                winget_path, "install", "-e", "--id", winget_id,
+                "--accept-source-agreements", "--accept-package-agreements",
+            ],
+            capture_output=True, text=True, timeout=300,
+        )
+        if result.returncode != 0:
+            print(f"WARNING: {label} installation failed.", file=sys.stderr)
+            if tool in TOOL_INSTALL_INSTRUCTIONS:
+                print(TOOL_INSTALL_INSTRUCTIONS[tool])
+        else:
+            _prepare_windows_path()
+            tools[tool] = which(tool)
+
+    # Re-check after installs
+    missing = print_missing_tools(tools)
+    if missing:
+        raise SystemExit(
+            f"Missing required tool(s): {', '.join(missing)}. "
+            "Install them manually and retry."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Usage / help
 # ---------------------------------------------------------------------------
 
 def print_usage() -> None:
-    print("OpenNotebookLM.sh - macOS/Linux launcher for OpenNotebookLM")
+    print("OpenNotebookLM - cross-platform launcher")
     print()
     print("Usage:")
-    print("  ./OpenNotebookLM.sh              Install missing dependencies if needed, then start everything.")
-    print("  ./OpenNotebookLM.sh --setup-only Install/repair dependencies, but do not start services.")
-    print("  ./OpenNotebookLM.sh --check      Run the local stack check only.")
-    print("  ./OpenNotebookLM.sh --stop       Stop services started by this project (via PID files).")
-    print("  ./OpenNotebookLM.sh --help       Show this message.")
+    print("  On macOS/Linux:    ./OpenNotebookLM.sh [flags]")
+    print("  On Windows:        OpenNotebookLM.bat [flags]")
     print()
-    print("Windows users: use OpenNotebookLM.bat instead.")
+    print("Flags:")
+    print("  --setup-only   Install/repair dependencies, but do not start services.")
+    print("  --force-setup  Re-run setup checks for missing pieces, then start services.")
+    print("  --check        Run the local stack check only.")
+    print("  --stop         Stop services started by this project (via PID files; macOS/Linux only).")
+    print("  --help, -h     Show this message.")
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +628,7 @@ def print_usage() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--setup-only", action="store_true")
+    parser.add_argument("--force-setup", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--stop", action="store_true")
     parser.add_argument("--help", action="store_true")
@@ -552,26 +644,33 @@ def main() -> int:
         print_usage()
         return 0
 
-    if sys.platform == "win32":
-        print("Windows detected. Please use OpenNotebookLM.bat instead of this script.", file=sys.stderr)
-        return 1
-
     if unknown:
         print(f"ERROR: Unknown argument(s): {' '.join(unknown)}", file=sys.stderr)
         print_usage()
         return 1
 
     if args.stop:
+        if sys.platform == "win32":
+            print("ERROR: --stop is not supported on Windows through this launcher.", file=sys.stderr)
+            return 1
         stop_services()
         return 0
 
     if args.check:
+        if sys.platform == "win32":
+            check_bat = ROOT / "check_local_agent_stack.bat"
+            result = subprocess.run(["cmd", "/c", str(check_bat)], cwd=str(ROOT))
+            return result.returncode
         return run_check()
 
     # Default: setup + start (or setup-only)
 
+    # Prepare Windows PATH before tool checks
+    if sys.platform == "win32":
+        _prepare_windows_path()
+
     # Detect if setup is needed
-    needs_setup = not BOOTSTRAP_MARKER.exists()
+    needs_setup = args.force_setup or not BOOTSTRAP_MARKER.exists()
     if not needs_setup:
         # Check for missing runtime markers
         if not venv_python("opennotebook").exists():
@@ -580,10 +679,16 @@ def main() -> int:
             needs_setup = True
         elif not venv_python("notebooklm-py").exists():
             needs_setup = True
+        elif sys.platform == "win32" and not venv_python("Hermes_agent").exists():
+            needs_setup = True
 
     if needs_setup:
         print("[OpenNotebookLM] First run or incomplete setup detected. Preparing local stack...")
         DATA_ROOT.mkdir(parents=True, exist_ok=True)
+
+        if sys.platform == "win32":
+            _ensure_windows_tools()
+
         prepare_working_copies()
         install_deps(do_ollama_model=True)
         BOOTSTRAP_MARKER.write_text(f"completed={time.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -593,11 +698,16 @@ def main() -> int:
 
     if args.setup_only:
         print()
-        print("Setup is complete. Run OpenNotebookLM.sh again without arguments to start services.")
+        launch_cmd = "OpenNotebookLM.bat" if sys.platform == "win32" else "./OpenNotebookLM.sh"
+        print(f"Setup is complete. Run {launch_cmd} again without arguments to start services.")
         return 0
 
     print()
     print("[OpenNotebookLM] Starting local stack...")
+    if sys.platform == "win32":
+        start_bat = ROOT / "start_local_agent_stack.bat"
+        result = subprocess.run(["cmd", "/c", str(start_bat)], cwd=str(ROOT))
+        return result.returncode
     start_services()
     return 0
 

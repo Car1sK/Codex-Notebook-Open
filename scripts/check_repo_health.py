@@ -44,6 +44,13 @@ FORBIDDEN_TRACKED_PREFIXES = [
     "dist/",
 ]
 
+FORBIDDEN_BAT_LABELS = [
+    ":bootstrap",
+    ":detect_first_run",
+    ":ensure_external_tools",
+    ":sync_uv_project",
+]
+
 
 def fail(message: str) -> None:
     raise RuntimeError(message)
@@ -163,8 +170,38 @@ def check_release_dry_run() -> None:
     run_command([sys.executable, "scripts/build_release.py", "--dry-run"], "Release dry run")
 
 
+def check_launcher_shape() -> None:
+    """Verify the thin-wrapper launcher shape: OpenNotebookLM.bat delegates to Python."""
+    bat_path = ROOT / "OpenNotebookLM.bat"
+    sh_path = ROOT / "OpenNotebookLM.sh"
+
+    if not bat_path.is_file():
+        fail("OpenNotebookLM.bat is missing.")
+
+    bat_text = bat_path.read_text(encoding="utf-8", errors="replace")
+    if "open_notebook_lm.py" not in bat_text:
+        fail("OpenNotebookLM.bat does not reference open_notebook_lm.py.")
+
+    bat_lower = bat_text.lower()
+    hits = [label for label in FORBIDDEN_BAT_LABELS if label in bat_lower]
+    if hits:
+        fail(
+            "OpenNotebookLM.bat contains forbidden legacy labels: "
+            + ", ".join(hits)
+            + ". The .bat must be a thin wrapper calling scripts/open_notebook_lm.py."
+        )
+
+    if not sh_path.is_file():
+        fail("OpenNotebookLM.sh is missing.")
+
+    sh_text = sh_path.read_text(encoding="utf-8", errors="replace")
+    if "open_notebook_lm.py" not in sh_text:
+        fail("OpenNotebookLM.sh does not reference open_notebook_lm.py.")
+
+
 def main() -> int:
     checks = [
+        ("launcher shape", check_launcher_shape),
         ("README language and headings", check_readmes),
         ("text encoding", check_text_encoding),
         (".gitignore runtime exclusions", check_gitignore),

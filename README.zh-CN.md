@@ -45,10 +45,10 @@ Windows 用户请使用 `OpenNotebookLM.bat`（参见下方说明）。
 ## 环境要求
 
 - Windows 10/11、macOS 或 Linux
-- Python 3.8+（macOS/Linux）或 PowerShell（Windows）
+- 所有平台都需要 Python 3.8+。Windows 用户可以使用 Python 启动器 `py -3`。
 - Git
 - 首次安装需要联网
-- 推荐安装 `winget`，这样启动器可以自动安装缺失的 Node.js、SurrealDB、Ollama
+- Windows 推荐安装 `winget`，这样启动器可以自动安装缺失的 Node.js、SurrealDB、Ollama
 
 启动器会用 `uv` 和 `npm ci` 安装或修复项目本地依赖。除了 Node.js、SurrealDB、Ollama、`uv` 这类外部工具外，依赖会放在当前仓库 checkout 内。
 

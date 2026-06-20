@@ -45,10 +45,10 @@ Windows users should use `OpenNotebookLM.bat` (see the section below).
 ## Requirements
 
 - Windows 10/11, macOS, or Linux
-- Python 3.8+ (macOS/Linux) or PowerShell (Windows)
+- Python 3.8+ on all platforms. Windows users can use the Python launcher `py -3`.
 - Git
 - Internet access for first-run dependency installation
-- `winget` is recommended so the launcher can install missing Node.js, SurrealDB, and Ollama
+- `winget` is recommended on Windows so the launcher can install missing Node.js, SurrealDB, and Ollama
 
 The launcher installs or repairs project-local dependencies with `uv` and `npm ci`. These are local to this checkout except for external tools such as Node.js, SurrealDB, Ollama, and `uv`.
 
