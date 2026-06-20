@@ -21,11 +21,32 @@ Codex Notebook Open 是一个面向 Windows 本地环境的一键启动与集成
 
 打包快照按本地运行用途裁剪，不包含大型上游测试集、录制夹具、文档站点、生成报告，以及 Hermes 自带 skills。
 
+## 快速开始（macOS / Linux）
+
+```bash
+git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+cd Codex-Notebook-Open
+./OpenNotebookLM.sh
+```
+
+然后打开 `http://localhost:3000`。
+
+POSIX 启动器支持与 Windows .bat 相同的模式：
+
+```bash
+./OpenNotebookLM.sh --setup-only
+./OpenNotebookLM.sh --check
+./OpenNotebookLM.sh --stop
+./OpenNotebookLM.sh --help
+```
+
+Windows 用户请使用 `OpenNotebookLM.bat`（参见下方说明）。
+
 ## 环境要求
 
-- Windows 10/11
+- Windows 10/11、macOS 或 Linux
+- Python 3.8+（macOS/Linux）或 PowerShell（Windows）
 - Git
-- PowerShell
 - 首次安装需要联网
 - 推荐安装 `winget`，这样启动器可以自动安装缺失的 Node.js、SurrealDB、Ollama
 
@@ -88,3 +109,19 @@ nomic-embed-text:latest
 ## 许可证与引用
 
 本仓库中的集成启动器和本地胶水代码使用 MIT License。打包的上游项目保留各自的 MIT License 和版权声明。详见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+
+## 发布包
+
+发布包可以在本地构建。发布 GitHub Release 时，将 `dist/` 中生成的文件作为附件上传：
+
+```bash
+# --dry-run 列出将包含的文件：
+python scripts/build_release.py --dry-run
+
+# 构建 zip 和 tar.gz：
+python scripts/build_release.py --version 1.0.0
+```
+
+输出：`dist/Codex-Notebook-Open-<version>.zip` 和 `dist/Codex-Notebook-Open-<version>.tar.gz`。
+
+POSIX `.tar.gz` 归档保留了 `OpenNotebookLM.sh` 的可执行位，解压后即可运行。

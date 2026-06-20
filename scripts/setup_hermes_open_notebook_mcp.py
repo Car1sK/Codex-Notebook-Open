@@ -1,15 +1,36 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import yaml
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
-HERMES_CONFIG = Path.home() / "AppData" / "Local" / "hermes" / "config.yaml"
-HERMES_ENV = Path.home() / "AppData" / "Local" / "hermes" / ".env"
 OPEN_NOTEBOOK_ENV = WORKSPACE / "opennotebook" / ".env"
-NOTEBOOKLM_PYTHON = WORKSPACE / "notebooklm-py" / ".venv" / "Scripts" / "python.exe"
+
+
+def _hermes_home() -> Path:
+    if "HERMES_HOME" in os.environ:
+        return Path(os.environ["HERMES_HOME"])
+    if sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+        return Path(local_appdata) / "hermes"
+    return Path.home() / ".hermes"
+
+
+HERMES_CONFIG = _hermes_home() / "config.yaml"
+HERMES_ENV = _hermes_home() / ".env"
+
+
+def _notebooklm_python() -> Path:
+    scripts = "Scripts" if sys.platform == "win32" else "bin"
+    exe = "python.exe" if sys.platform == "win32" else "python"
+    return WORKSPACE / "notebooklm-py" / ".venv" / scripts / exe
+
+
+NOTEBOOKLM_PYTHON = _notebooklm_python()
 
 REQUIRED_TOOLS = [
     "open_notebook_list_notebooks",

@@ -35,6 +35,9 @@ Thumbs.db
 # Local nested Git metadata is preserved on this workstation but never bundled.
 **/.git/
 
+# Release artifacts
+dist/
+
 # Generated local HTML reports/guides are not part of the public source bundle.
 /*.html
 notebooklm-py/notebooklm_py_repository_analysis.html

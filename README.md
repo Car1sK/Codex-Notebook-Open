@@ -21,11 +21,32 @@ The goal is a practical local stack: users manage sources, notebooks, and final 
 
 The bundled snapshots are trimmed for local runtime use. Large upstream test suites, recorded fixtures, documentation sites, generated reports, and Hermes bundled skills are not included.
 
+## Quick start (macOS / Linux)
+
+```bash
+git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+cd Codex-Notebook-Open
+./OpenNotebookLM.sh
+```
+
+Then open `http://localhost:3000`.
+
+The POSIX launcher supports the same modes as the Windows .bat:
+
+```bash
+./OpenNotebookLM.sh --setup-only
+./OpenNotebookLM.sh --check
+./OpenNotebookLM.sh --stop
+./OpenNotebookLM.sh --help
+```
+
+Windows users should use `OpenNotebookLM.bat` (see the section below).
+
 ## Requirements
 
-- Windows 10/11
+- Windows 10/11, macOS, or Linux
+- Python 3.8+ (macOS/Linux) or PowerShell (Windows)
 - Git
-- PowerShell
 - Internet access for first-run dependency installation
 - `winget` is recommended so the launcher can install missing Node.js, SurrealDB, and Ollama
 
@@ -88,3 +109,19 @@ The stack check verifies that Ollama is reachable and returns a 768-dimensional 
 ## License and attribution
 
 The integration launcher and local glue code in this repository are released under the MIT License. Upstream bundled projects keep their own MIT licenses and copyright notices. See [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Release packages
+
+Release archives can be built locally. When publishing a GitHub Release, attach the generated files from `dist/`:
+
+```bash
+# --dry-run lists what would be included:
+python scripts/build_release.py --dry-run
+
+# Build zip and tar.gz:
+python scripts/build_release.py --version 1.0.0
+```
+
+Output: `dist/Codex-Notebook-Open-<version>.zip` and `dist/Codex-Notebook-Open-<version>.tar.gz`.
+
+The POSIX `.tar.gz` archive preserves the executable bit on `OpenNotebookLM.sh` so it's ready to run after extraction.
