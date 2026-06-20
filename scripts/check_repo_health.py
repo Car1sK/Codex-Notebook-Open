@@ -199,9 +199,39 @@ def check_launcher_shape() -> None:
         fail("OpenNotebookLM.sh does not reference open_notebook_lm.py.")
 
 
+def check_open_notebook_single_instance_guard() -> None:
+    """Verify Open Notebook start paths guard against duplicate frontend/backend launches."""
+    bat_text = read_text("start_open_notebook.bat")
+    python_text = read_text("scripts/open_notebook_lm.py")
+
+    required_bat_markers = [
+        "launcher.lock",
+        "Another launcher is already starting Open Notebook; waiting for the existing startup.",
+        "Backend/API is already running on port 5055; reusing it.",
+        "Frontend is already running on port 3000; reusing it.",
+        "Backend/API is already running on port 5055; no new backend started.",
+        "Frontend is already running on port 3000; no new frontend started.",
+    ]
+    missing_bat = [marker for marker in required_bat_markers if marker not in bat_text]
+    if missing_bat:
+        fail("start_open_notebook.bat is missing single-instance guards: " + ", ".join(missing_bat))
+
+    required_python_markers = [
+        "acquire_launcher_lock",
+        "Another launcher is already starting Open Notebook; waiting for it.",
+        "api_already_running",
+        "Open Notebook backend/API port 5055 is already listening; reusing it.",
+        "Open Notebook frontend port 3000 is already listening; reusing it.",
+    ]
+    missing_python = [marker for marker in required_python_markers if marker not in python_text]
+    if missing_python:
+        fail("scripts/open_notebook_lm.py is missing single-instance guards: " + ", ".join(missing_python))
+
+
 def main() -> int:
     checks = [
         ("launcher shape", check_launcher_shape),
+        ("Open Notebook single-instance guards", check_open_notebook_single_instance_guard),
         ("README language and headings", check_readmes),
         ("text encoding", check_text_encoding),
         (".gitignore runtime exclusions", check_gitignore),

@@ -298,6 +298,45 @@ def is_port_listening(host: str, port: int) -> bool:
         return False
 
 
+def acquire_launcher_lock() -> bool:
+    """Acquire a lightweight startup lock; returns False when another start is active."""
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    lock_dir = DATA_ROOT / "launcher.lock"
+    try:
+        lock_dir.mkdir()
+        return True
+    except FileExistsError:
+        try:
+            if time.time() - lock_dir.stat().st_mtime > 15 * 60:
+                lock_dir.rmdir()
+                lock_dir.mkdir()
+                return True
+        except OSError:
+            pass
+        return False
+
+
+def release_launcher_lock() -> None:
+    """Release the startup lock if this process owns it."""
+    lock_dir = DATA_ROOT / "launcher.lock"
+    try:
+        lock_dir.rmdir()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+
+
+def wait_for_existing_startup() -> None:
+    """Wait for another launcher invocation to finish exposing Open Notebook."""
+    print("[Start] Another launcher is already starting Open Notebook; waiting for it.")
+    _wait_for_port("127.0.0.1", 5055, 120)
+    _wait_for_port("127.0.0.1", 3000, 120)
+    print()
+    print("OpenNotebookLM is ready.")
+    print("Open Notebook: http://localhost:3000")
+
+
 # ---------------------------------------------------------------------------
 # Service management
 # ---------------------------------------------------------------------------
@@ -318,49 +357,50 @@ def start_services() -> None:
     surreal_db_dir = DATA_ROOT / "surrealdb"
     surreal_db_dir.mkdir(parents=True, exist_ok=True)
 
-    if is_port_listening("127.0.0.1", 8000):
-        print("[Start] SurrealDB port 8000 is already listening; reusing it.")
+    api_already_running = is_port_listening("127.0.0.1", 5055)
+    if api_already_running:
+        print("[Start] Open Notebook backend/API port 5055 is already listening; reusing it.")
     else:
-        print("[Start] Launching SurrealDB on port 8000...")
-        p1 = subprocess.Popen(
-            [
-                "surreal", "start",
-                "--user", "root", "--pass", "root",
-                "--bind", "127.0.0.1:8000",
-                "--log", "warn",
-                f"rocksdb:{surreal_db_dir / 'database.db'}",
-            ],
-            stdout=open(str(surreal_log), "w"),
+        if is_port_listening("127.0.0.1", 8000):
+            print("[Start] SurrealDB port 8000 is already listening; reusing it.")
+        else:
+            print("[Start] Launching SurrealDB on port 8000...")
+            p1 = subprocess.Popen(
+                [
+                    "surreal", "start",
+                    "--user", "root", "--pass", "root",
+                    "--bind", "127.0.0.1:8000",
+                    "--log", "warn",
+                    f"rocksdb:{surreal_db_dir / 'database.db'}",
+                ],
+                stdout=open(str(surreal_log), "w"),
+                stderr=subprocess.STDOUT,
+                cwd=str(ROOT),
+                env=env,
+            )
+            surreal_pid.write_text(str(p1.pid))
+
+            # Wait for SurrealDB
+            print("[Start] Waiting for SurrealDB (port 8000)...")
+            _wait_for_port("127.0.0.1", 8000, 30)
+
+        # 2. Worker
+        worker_log = DATA_ROOT / "worker.log"
+        worker_pid_file = DATA_ROOT / "worker.pid"
+        print("[Start] Launching worker...")
+        p2 = subprocess.Popen(
+            [str(vp), "-m", "surreal_commands.cli.worker", "--import-modules", "commands"],
+            stdout=open(str(worker_log), "w"),
             stderr=subprocess.STDOUT,
-            cwd=str(ROOT),
+            cwd=str(ROOT / "opennotebook"),
             env=env,
         )
-        surreal_pid.write_text(str(p1.pid))
+        worker_pid_file.write_text(str(p2.pid))
 
-        # Wait for SurrealDB
-        print("[Start] Waiting for SurrealDB (port 8000)...")
-        _wait_for_port("127.0.0.1", 8000, 30)
-
-    # 2. Worker
-    worker_log = DATA_ROOT / "worker.log"
-    worker_pid_file = DATA_ROOT / "worker.pid"
-    print("[Start] Launching worker...")
-    p2 = subprocess.Popen(
-        [str(vp), "-m", "surreal_commands.cli.worker", "--import-modules", "commands"],
-        stdout=open(str(worker_log), "w"),
-        stderr=subprocess.STDOUT,
-        cwd=str(ROOT / "opennotebook"),
-        env=env,
-    )
-    worker_pid_file.write_text(str(p2.pid))
-
-    # 3. API
-    api_log = DATA_ROOT / "api.log"
-    api_pid_file = DATA_ROOT / "api.pid"
-    api_entry = ROOT / "opennotebook" / "run_api.py"
-    if is_port_listening("127.0.0.1", 5055):
-        print("[Start] Open Notebook API port 5055 is already listening; reusing it.")
-    else:
+        # 3. API
+        api_log = DATA_ROOT / "api.log"
+        api_pid_file = DATA_ROOT / "api.pid"
+        api_entry = ROOT / "opennotebook" / "run_api.py"
         print("[Start] Launching API on port 5055...")
         p3 = subprocess.Popen(
             [str(vp), str(api_entry)],
@@ -708,7 +748,15 @@ def main() -> int:
         start_bat = ROOT / "start_local_agent_stack.bat"
         result = subprocess.run(["cmd", "/c", str(start_bat)], cwd=str(ROOT))
         return result.returncode
-    start_services()
+
+    lock_acquired = acquire_launcher_lock()
+    if not lock_acquired:
+        wait_for_existing_startup()
+        return 0
+    try:
+        start_services()
+    finally:
+        release_launcher_lock()
     return 0
 
 
