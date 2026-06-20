@@ -125,3 +125,13 @@ python scripts/build_release.py --version 1.0.0
 输出：`dist/Codex-Notebook-Open-<version>.zip` 和 `dist/Codex-Notebook-Open-<version>.tar.gz`。
 
 POSIX `.tar.gz` 归档保留了 `OpenNotebookLM.sh` 的可执行位，解压后即可运行。
+
+## 仓库健康检查
+
+发布或交给其他代理前，运行：
+
+```bash
+python scripts/check_repo_health.py
+```
+
+它会检查 README 语言链接、明显编码损坏、本地运行数据的 Git 排除规则、Python 脚本语法，以及发布包 dry-run 路径。

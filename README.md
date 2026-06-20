@@ -125,3 +125,13 @@ python scripts/build_release.py --version 1.0.0
 Output: `dist/Codex-Notebook-Open-<version>.zip` and `dist/Codex-Notebook-Open-<version>.tar.gz`.
 
 The POSIX `.tar.gz` archive preserves the executable bit on `OpenNotebookLM.sh` so it's ready to run after extraction.
+
+## Repository health check
+
+Before publishing or handing the repository to another agent, run:
+
+```bash
+python scripts/check_repo_health.py
+```
+
+This validates README language links, obvious encoding damage, local/runtime Git exclusions, Python script syntax, and the release dry-run path.

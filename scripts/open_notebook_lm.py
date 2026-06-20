@@ -1,5 +1,5 @@
 # macOS/Linux cross-platform launcher for OpenNotebookLM.
-# Windows users should use OpenNotebookLM.bat — this script will redirect them.
+# Windows users should use OpenNotebookLM.bat -- this script will redirect them.
 from __future__ import annotations
 
 import argparse
@@ -101,7 +101,7 @@ TOOL_INSTALL_INSTRUCTIONS: dict[str, str] = {
     ),
     "npm": (
         "npm is required for the Open Notebook frontend.\n"
-        "It ships with Node.js — install Node.js first."
+        "It ships with Node.js -- install Node.js first."
     ),
     "surreal": (
         "SurrealDB CLI is required for the database.\n"
@@ -430,7 +430,7 @@ def stop_services() -> None:
         except ProcessLookupError:
             print(f"  Process {pid} already gone.")
         except PermissionError:
-            print(f"  Cannot signal process {pid} — permission denied.", file=sys.stderr)
+            print(f"  Cannot signal process {pid} -- permission denied.", file=sys.stderr)
 
         pid_file.unlink()
 
@@ -503,7 +503,7 @@ def run_check() -> int:
             issues += 1
     else:
         print()
-        print("  (Ollama port 11434 is not listening — skipping model checks)")
+        print("  (Ollama port 11434 is not listening -- skipping model checks)")
 
     print()
     if issues == 0:
