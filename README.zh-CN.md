@@ -54,6 +54,8 @@ Windows 用户请使用 `OpenNotebookLM.bat`（参见下方说明）。
 
 新克隆仓库首次启动时，启动器会从 `components/opennotebook`、`components/notebooklm-py`、`components/Hermes_agent` 复制出根目录运行副本。根目录运行副本会被 Git 忽略，因为里面会生成虚拟环境和运行状态。
 
+重复调用启动器是安全的。`OpenNotebookLM.bat` 和 `start_open_notebook.bat` 会使用启动锁和端口探测；第二次调用会等待或复用已有的 Open Notebook 后端/API（端口 `5055`）和前端（端口 `3000`），不会再打开重复的服务窗口。
+
 ## 快速开始
 
 ```bat

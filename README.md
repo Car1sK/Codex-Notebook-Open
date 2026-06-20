@@ -54,6 +54,8 @@ The launcher installs or repairs project-local dependencies with `uv` and `npm c
 
 On a fresh clone, the launcher prepares local runnable working copies from `components/opennotebook`, `components/notebooklm-py`, and `components/Hermes_agent`. Those root-level working copies are ignored by Git because they contain generated environments and runtime state.
 
+Repeated launcher calls are safe. `OpenNotebookLM.bat` and `start_open_notebook.bat` use startup locks plus port probes so a second invocation waits for or reuses the existing Open Notebook backend/API on port `5055` and frontend on port `3000` instead of opening duplicate service windows.
+
 ## Quick start
 
 ```bat
