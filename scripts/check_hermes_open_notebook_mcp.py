@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
+
+
+if "HERMES_HOME" not in os.environ:
+    os.environ["HERMES_HOME"] = str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "hermes")
 
 from tools.mcp_tool import discover_mcp_tools, shutdown_mcp_servers
 from tools.registry import registry

@@ -11,6 +11,7 @@ $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $HermesDir = Join-Path $Root "Hermes_agent"
 $HermesExe = Join-Path $HermesDir ".venv\Scripts\hermes.exe"
 $OpenNotebookEnv = Join-Path $Root "opennotebook\.env"
+$env:HERMES_HOME = Join-Path $env:LOCALAPPDATA "hermes"
 
 function Start-HermesAgent {
     if (-not (Test-Path -LiteralPath $HermesExe)) {

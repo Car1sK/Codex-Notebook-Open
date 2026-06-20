@@ -22,6 +22,7 @@ $ProcessRunner = Join-Path $Root "scripts\invoke_process.py"
 $SimpleModel = "deepseek-v4-flash"
 $ImplementationModel = "deepseek-v4-pro"
 $ReviewerModel = "deepseek-v4-pro"
+$env:HERMES_HOME = Join-Path $env:LOCALAPPDATA "hermes"
 
 function Write-TextFile {
     param([string]$Path, [string]$Value)

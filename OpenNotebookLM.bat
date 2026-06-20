@@ -213,10 +213,20 @@ set "PROJECT_NAME=%~1"
 set "PROJECT_MARKER=%~2"
 set "PROJECT_URL=%~3"
 set "PROJECT_DIR=%WORKSPACE%%PROJECT_NAME%"
+set "COMPONENT_DIR=%WORKSPACE%components\%PROJECT_NAME%"
 if exist "%PROJECT_DIR%\%PROJECT_MARKER%" exit /b 0
 if exist "%PROJECT_DIR%" (
   echo ERROR: "%PROJECT_DIR%" exists but does not look like the expected project folder.
   exit /b 1
+)
+if exist "%COMPONENT_DIR%\%PROJECT_MARKER%" (
+  echo [Setup] Preparing %PROJECT_NAME% from bundled source snapshot...
+  robocopy "%COMPONENT_DIR%" "%PROJECT_DIR%" /E /XD .git .venv node_modules __pycache__ .pytest_cache .mypy_cache .ruff_cache .trial_runtime /XF *.pyc *.log *.out.log *.err.log .env >nul
+  if errorlevel 8 (
+    echo ERROR: Could not prepare "%PROJECT_NAME%" from bundled source snapshot.
+    exit /b 1
+  )
+  exit /b 0
 )
 where git.exe >nul 2>nul
 if errorlevel 1 (

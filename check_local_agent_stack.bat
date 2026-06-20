@@ -9,6 +9,7 @@ set "OPEN_NOTEBOOK_PYTHON=%WORKSPACE%opennotebook\.venv\Scripts\python.exe"
 set "ENV_FILE=%WORKSPACE%opennotebook\.env"
 set "OPEN_NOTEBOOK_URL=http://localhost:5055"
 set "OLLAMA_API_BASE=http://127.0.0.1:11434"
+set "HERMES_HOME=%LOCALAPPDATA%\hermes"
 
 echo [Check] OpenNotebookLM local stack
 echo.

@@ -1,0 +1,17 @@
+-- Migration 16: per-entity external import mappings
+
+-- Compatibility for local databases that used migration number 15 before
+-- Open Notebook v1.10.0 assigned that number to credential.config.
+DEFINE FIELD IF NOT EXISTS config ON credential FLEXIBLE TYPE option<object>;
+
+DEFINE TABLE IF NOT EXISTS external_sync_mapping SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS provider ON TABLE external_sync_mapping TYPE string;
+DEFINE FIELD IF NOT EXISTS remote_type ON TABLE external_sync_mapping TYPE string;
+DEFINE FIELD IF NOT EXISTS remote_id ON TABLE external_sync_mapping TYPE string;
+DEFINE FIELD IF NOT EXISTS remote_parent_id ON TABLE external_sync_mapping TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS local_id ON TABLE external_sync_mapping TYPE string;
+DEFINE FIELD IF NOT EXISTS content_hash ON TABLE external_sync_mapping TYPE string;
+DEFINE FIELD IF NOT EXISTS created ON TABLE external_sync_mapping TYPE datetime DEFAULT time::now();
+DEFINE FIELD IF NOT EXISTS updated ON TABLE external_sync_mapping TYPE datetime DEFAULT time::now() VALUE time::now();
+
+DEFINE INDEX IF NOT EXISTS idx_external_sync_remote ON TABLE external_sync_mapping COLUMNS provider, remote_type, remote_id UNIQUE;

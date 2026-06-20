@@ -1,25 +1,43 @@
-﻿# Local data and secrets
+# Local data and secrets
 .env
 **/.env
 open-notebook-data/
 .hermes_delegations/
 *.log
+*.out.log
+*.err.log
+
+# Local runnable working copies are created from components/ or cloned on first run.
+/Hermes_agent/
+/notebooklm-py/
+/opennotebook/
 
 # Local agent/editor state
 .agents/
 .codex/
 .ruff_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.trial_runtime/
 
 # Dependencies and build/cache output
 **/.venv/
 **/node_modules/
 **/__pycache__/
+**/*.egg-info/
+opennotebook/frontend/.next/
+opennotebook/frontend/test-results/
 *.pyc
 .DS_Store
 Thumbs.db
 
-# Embedded upstream repositories are intentionally not tracked by this meta repo.
-# See REPOSITORIES.md for their remotes and pinned local commits.
-Hermes_agent/
-notebooklm-py/
-opennotebook/
+# Local nested Git metadata is preserved on this workstation but never bundled.
+**/.git/
+
+# Generated local HTML reports/guides are not part of the public source bundle.
+/*.html
+notebooklm-py/notebooklm_py_repository_analysis.html
+opennotebook/repo_overview.html
+components/notebooklm-py/notebooklm_py_repository_analysis.html
+components/opennotebook/repo_overview.html
