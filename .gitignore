@@ -1,0 +1,25 @@
+﻿# Local data and secrets
+.env
+**/.env
+open-notebook-data/
+.hermes_delegations/
+*.log
+
+# Local agent/editor state
+.agents/
+.codex/
+.ruff_cache/
+
+# Dependencies and build/cache output
+**/.venv/
+**/node_modules/
+**/__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# Embedded upstream repositories are intentionally not tracked by this meta repo.
+# See REPOSITORIES.md for their remotes and pinned local commits.
+Hermes_agent/
+notebooklm-py/
+opennotebook/

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Notebook 本地 Agent 集成指南</title>
+  <style>
+    body { max-width: 960px; margin: 40px auto; padding: 0 24px; color: #172033; font: 16px/1.75 system-ui, "Microsoft YaHei", sans-serif; background: #f7f9fc; }
+    main { background: #fff; border: 1px solid #e3e8ef; border-radius: 16px; padding: 28px; }
+    h1, h2 { line-height: 1.25; }
+    code { background: #eef2f7; border-radius: 5px; padding: 2px 6px; }
+    pre { overflow-x: auto; background: #111827; color: #f9fafb; border-radius: 10px; padding: 16px; }
+    .note { border-left: 4px solid #2563eb; background: #eff6ff; padding: 12px 16px; border-radius: 8px; }
+    .warn { border-left-color: #d97706; background: #fff7ed; }
+    li { margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="note">
+    <h2>当前推荐入口：统一启动器</h2>
+    <p>日常不要分别运行多个脚本。直接双击根目录的 <code>OpenNotebookLM.bat</code>，它会识别首次运行和后续运行：首次运行会安装或修复本地依赖，后续运行会直接启动 Ollama、Open Notebook、Codex MCP 和 Hermes。</p>
+    <pre>D:\applyandcreate\workplace\OpenNotebookLM\OpenNotebookLM.bat</pre>
+    <p>维护参数：<code>--setup-only</code> 只安装不启动；<code>--force-setup</code> 强制重新检查缺失项，但不会重装已经存在的环境；<code>--check</code> 只做只读状态检查。下面列出的其它 bat 是内部组件或排错入口，不是日常入口。</p>
+  </section>
+  <h1>Open Notebook 本地 Agent 集成指南</h1>
+  <p>当前项目的目标不是替用户自动整理完整笔记，而是把 Open Notebook、notebooklm-py 和 Hermes_agent 封成一个本地协作工作流：用户在 Open Notebook 管理资料和最终笔记，agent 通过 notebooklm-py 的 CLI/MCP 工具辅助导入资料、管理笔记、检查状态和执行低摩擦操作。</p>
+
+  <h2>系统边界</h2>
+  <table>
+    <thead><tr><th>组件</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><td><code>opennotebook/</code></td><td>用户可视化管理 notebook、source、note、模型配置和本地数据。</td></tr>
+      <tr><td><code>notebooklm-py/</code></td><td>提供本地 CLI/MCP 桥接层，让 Codex 等 agent 能调用 Open Notebook API。</td></tr>
+      <tr><td><code>Hermes_agent/</code></td><td>承接低/中风险实现任务，最后由 Codex 审查。</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note warn">Rhet 只是历史测试资料夹，不属于本项目目标。TTS/STT 不属于常规验收标准；只有用户明确要求时才作为能力检查处理。</p>
+
+  <h2>一键启动 Open Notebook</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\start_open_notebook.bat</pre>
+  <p>双击后会启动后端窗口和前端窗口。后端窗口内包含 SurrealDB、worker 和 API；前端会打开 <code>http://localhost:3000</code>。持久化数据和日志位于 <code>open-notebook-data/</code>。后端启动时会注入 <code>OLLAMA_API_BASE=http://127.0.0.1:11434</code>，便于 Open Notebook 使用本机 Ollama。</p>
+
+  <p class="note">日常使用只需要根目录下的 <code>.bat</code> 入口。<code>scripts/</code> 目录里的 PowerShell/Python 文件是内部实现，不需要手动运行。</p>
+
+  <h2>启动/检查 Ollama 本地模型</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\start_ollama_models.bat</pre>
+  <p>该脚本会确认 <code>ollama.exe</code> 可用，必要时启动本机 Ollama API，然后用 <code>nomic-embed-text:latest</code> 执行一次 embedding 冒烟测试。也可以通过环境变量 <code>OLLAMA_EMBEDDING_MODEL</code> 指定其他 embedding 模型。</p>
+  <p class="note warn">当前 Ollama 检查会同时确认 Qwen TTS 是否通过 Ollama 可用。若本机 <code>ollama list</code> 中没有已注册的 Qwen TTS 模型，或 Ollama 没有返回音频接口结果，脚本会给出 warning；这不会阻止 embedding 和本地 Agent 工作栈启动。</p>
+
+  <h2>一键启动本地 Agent 工作栈</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\start_local_agent_stack.bat</pre>
+  <p>该入口会依次启动/检查 Ollama、本地 Open Notebook、刷新 Codex MCP 连接、刷新 Hermes MCP 连接，然后启动 Hermes。Codex MCP 配置刷新后，通常需要重启 Codex 或打开新线程才能加载最新工具；Hermes 侧可在新会话中加载，或在会话内运行 <code>/reload-mcp</code>。</p>
+
+  <h2>刷新 Codex MCP 连接</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\setup_codex_open_notebook_mcp.bat</pre>
+  <p>在首次配置、修改 Open Notebook 密码、或更新 <code>notebooklm-py</code> 后运行。脚本会读取 <code>opennotebook/.env</code> 中的本地密码，并把当前 <code>notebooklm-py</code> 安装为 Codex MCP 服务。不要把 <code>.env</code> 内容粘贴到聊天或提交到仓库。</p>
+
+  <h2>刷新 Hermes MCP 连接</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\setup_hermes_open_notebook_mcp.bat</pre>
+  <p>该脚本会确保 Hermes MCP 支持已安装，然后把同一个 <code>notebooklm-py</code> Open Notebook MCP server 注册到 Hermes，server 名称为 <code>open_notebook</code>。密码保存在 Hermes 本地 <code>.env</code>，<code>config.yaml</code> 只保留环境变量占位符。通过 <code>start_hermes.bat</code> 启动时会自动把 Open Notebook 连接环境注入 Hermes 进程。Hermes 中对应工具名会带 <code>mcp_open_notebook_</code> 前缀，例如 <code>mcp_open_notebook_open_notebook_list_notebooks</code>。</p>
+
+  <h2>只读检查连接状态</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\check_local_agent_stack.bat</pre>
+  <p>该脚本不会写入 Open Notebook 数据，只检查 Ollama embedding 模型、<code>8000</code>、<code>5055</code>、<code>3000</code> 端口、Hermes 可执行文件、Codex MCP 配置、Hermes MCP 连接、<code>notebooklm-py</code> 是否能读取 notebook 列表、Open Notebook MCP 工具清单是否包含 notebook/source/note 管理工具，以及 Hermes MCP 工具是否能实际读取 notebook/source。</p>
+
+  <h2>启动 Hermes</h2>
+  <pre>D:\applyandcreate\workplace\OpenNotebookLM\start_hermes.bat</pre>
+  <p>Hermes 用于实现类任务的代理分工。Codex 仍然负责最终审查和验收。</p>
+
+  <h2>Agent 可用 Open Notebook 工具</h2>
+  <ul>
+    <li><code>open_notebook_list_notebooks</code>：列出 notebook。</li>
+    <li><code>open_notebook_create_notebook</code>：在用户明确要求时创建 notebook。</li>
+    <li><code>open_notebook_list_sources</code>：列出已导入的资料/source。</li>
+    <li><code>open_notebook_create_text_source</code>：把文本作为 source 导入 Open Notebook；默认使用异步处理，避免 agent 在资料处理阶段阻塞；这不是创建最终笔记。</li>
+    <li><code>open_notebook_list_notes</code>：列出 note。</li>
+    <li><code>open_notebook_get_note</code>：读取单条 note。</li>
+    <li><code>open_notebook_create_note</code>：在用户明确要求时创建 note。</li>
+    <li><code>open_notebook_update_note</code>：在用户明确要求时更新 note。</li>
+    <li><code>open_notebook_delete_note</code>：删除 note，需要二次确认。</li>
+  </ul>
+
+  <h2>CLI 备用入口</h2>
+<pre>cd D:\applyandcreate\workplace\OpenNotebookLM\notebooklm-py
+uv run notebooklm open-notebook notebooks --json
+uv run notebooklm open-notebook notebook-create "新笔记本名称" --description "可选描述" --json
+uv run notebooklm open-notebook sources --notebook-id notebook:ID --json
+uv run notebooklm open-notebook source-create-text "资料正文" --title "资料标题" --notebook-id notebook:ID --json
+uv run notebooklm open-notebook notes --notebook-id notebook:ID --json
+uv run notebooklm open-notebook note-create "笔记正文" --title "标题" --notebook-id notebook:ID --json</pre>
+
+  <h2>当前验收口径</h2>
+  <ul>
+    <li>用户能用 bat 启动 Open Notebook。</li>
+    <li>一键启动本地 Agent 工作栈前会启动/检查 Ollama，并验证本地 embedding 模型能返回向量。</li>
+    <li>Codex MCP 能连接本地 Open Notebook API。</li>
+    <li>用户能用只读检查 bat 验证本地端口、MCP 配置和 API 连接状态。</li>
+    <li>Agent 能通过 notebooklm-py 列/创建 notebook、列 source、异步导入文本 source、列/读/写 note。</li>
+    <li>默认不要求用户记复杂命令；命令只作为故障排查备用入口。</li>
+    <li>不把测试资料夹、自动写完整笔记混入核心目标；TTS/STT 仅在用户明确要求时作为能力检查处理。</li>
+  </ul>
+</main>
+</body>
+</html>
