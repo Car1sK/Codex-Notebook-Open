@@ -22,8 +22,6 @@ FALLBACK_FILES: list[str] = [
     "README.zh-CN.md",
     "REPOSITORIES.md",
     "THIRD_PARTY.md",
-    "delegate_to_hermes.bat",
-    "delegate_to_hermes.ps1",
 ]
 
 INCLUDE_DIRS = ["components", "scripts"]

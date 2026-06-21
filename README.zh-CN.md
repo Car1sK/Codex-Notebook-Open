@@ -113,10 +113,9 @@ OpenNotebookLM.bat --stop-hermes
 
 `--check` 或 `--check-install` 用于检查发布包/安装准备状态，不要求服务已经运行。需要确认数据库、API、前端、MCP 桥接和 Hermes 当前正在运行时，使用 `--check-live`。
 
-发布包根目录只保留两个 Windows 批处理文件：
+发布包根目录只保留一个 Windows 批处理文件：
 
 - `OpenNotebookLM.bat`：普通用户入口，负责安装、启动、检查、MCP 刷新和 Hermes 启停。
-- `delegate_to_hermes.bat`：Codex 委派 Hermes 时使用的兼容包装入口。
 
 ## 运行数据和密钥
 
@@ -127,7 +126,7 @@ OpenNotebookLM.bat --stop-hermes
 - `opennotebook/.env`
 - `.venv/`
 - `node_modules/`
-- 日志和 Hermes 委派产物
+- 日志和临时运行产物
 
 启动器会在需要时创建或修复 `opennotebook/.env`。不要提交加密密钥、密码、笔记数据库、上传资料或生成的音频/文本产物。
 

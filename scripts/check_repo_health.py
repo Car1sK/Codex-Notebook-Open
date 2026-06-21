@@ -56,6 +56,10 @@ FORBIDDEN_TRACKED_FILES = {
     "start_ollama_models.bat",
     "start_open_notebook.bat",
     "stop_hermes.bat",
+    "delegate_to_hermes.bat",
+    "delegate_to_hermes.ps1",
+    "scripts/invoke_process.py",
+    "scripts/test_hermes_workflow.ps1",
 }
 
 FORBIDDEN_BAT_LABELS = [

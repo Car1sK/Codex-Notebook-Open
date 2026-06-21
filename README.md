@@ -113,10 +113,9 @@ OpenNotebookLM.bat --stop-hermes
 
 Use `--check` or `--check-install` for package/setup readiness checks that do not require live services. Use `--check-live` when you want to verify that the database, API, frontend, MCP bridges, and Hermes are currently running.
 
-Only two root-level Windows batch files are shipped:
+Only one root-level Windows batch file is shipped:
 
 - `OpenNotebookLM.bat` — normal user entrypoint for setup, startup, checks, MCP refresh, and Hermes start/stop.
-- `delegate_to_hermes.bat` — compatibility wrapper used by Codex delegation workflows.
 
 ## Runtime data and secrets
 
@@ -127,7 +126,7 @@ Runtime data is intentionally local-only:
 - `opennotebook/.env`
 - `.venv/`
 - `node_modules/`
-- logs and delegation artifacts
+- logs and temporary runtime artifacts
 
 The launcher creates or repairs `opennotebook/.env` when needed. Do not commit encryption keys, passwords, notebook data, uploaded source material, or generated audio/text artifacts.
 
