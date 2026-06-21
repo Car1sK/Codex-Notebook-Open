@@ -46,6 +46,18 @@ FORBIDDEN_TRACKED_PREFIXES = [
     "dist/",
 ]
 
+FORBIDDEN_TRACKED_FILES = {
+    "check_local_agent_stack.bat",
+    "hermes.bat",
+    "setup_codex_open_notebook_mcp.bat",
+    "setup_hermes_open_notebook_mcp.bat",
+    "start_hermes.bat",
+    "start_local_agent_stack.bat",
+    "start_ollama_models.bat",
+    "start_open_notebook.bat",
+    "stop_hermes.bat",
+}
+
 FORBIDDEN_BAT_LABELS = [
     ":bootstrap",
     ":detect_first_run",
@@ -146,6 +158,7 @@ def check_tracked_files() -> None:
         if any(path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_PREFIXES)
         or path == "AGENTS.md"
         or path.endswith("/AGENTS.md")
+        or path in FORBIDDEN_TRACKED_FILES
     ]
     if forbidden:
         fail("Runtime working-copy paths are tracked:\n  " + "\n  ".join(forbidden[:20]))
@@ -182,8 +195,17 @@ def check_release_dry_run() -> None:
     if result.returncode != 0:
         output = (result.stdout + result.stderr).strip()
         fail(f"Release dry run failed with exit code {result.returncode}:\n{output}")
-    if "AGENTS.md" in result.stdout or "AGENTS.md" in result.stderr:
+    included_files: list[str] = []
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and "] " in stripped:
+            included_files.append(stripped.split("] ", 1)[1].replace("\\", "/"))
+
+    if any(path == "AGENTS.md" or path.endswith("/AGENTS.md") for path in included_files):
         fail("Release dry run includes AGENTS.md, which must stay local-only.")
+    for filename in FORBIDDEN_TRACKED_FILES:
+        if filename in included_files:
+            fail(f"Release dry run includes deprecated component launcher: {filename}")
 
 
 def check_startup_guard_smoke() -> None:
@@ -220,32 +242,21 @@ def check_launcher_shape() -> None:
 
 
 def check_open_notebook_single_instance_guard() -> None:
-    """Verify Open Notebook start paths guard against duplicate frontend/backend launches."""
-    bat_text = read_text("start_open_notebook.bat")
+    """Verify the single Python launcher owns duplicate-start protection and stack actions."""
     python_text = read_text("scripts/open_notebook_lm.py")
-
-    required_bat_markers = [
-        "launcher.lock",
-        "backend.lock",
-        "frontend.lock",
-        "Another launcher is already starting Open Notebook; waiting for the existing startup.",
-        "Another backend start is already in progress; waiting for port 5055.",
-        "Another frontend start is already in progress; waiting for port 3000.",
-        "Backend/API is already running on port 5055; reusing it.",
-        "Frontend is already running on port 3000; reusing it.",
-        "Backend/API is already running on port 5055; no new backend started.",
-        "Frontend is already running on port 3000; no new frontend started.",
-    ]
-    missing_bat = [marker for marker in required_bat_markers if marker not in bat_text]
-    if missing_bat:
-        fail("start_open_notebook.bat is missing single-instance guards: " + ", ".join(missing_bat))
 
     required_python_markers = [
         "acquire_launcher_lock",
+        "wait_for_existing_startup",
+        "launcher.lock",
         "Another launcher is already starting Open Notebook; waiting for it.",
         "api_already_running",
         "Open Notebook backend/API port 5055 is already listening; reusing it.",
         "Open Notebook frontend port 3000 is already listening; reusing it.",
+        "setup_codex_mcp",
+        "setup_hermes_mcp",
+        "start_hermes",
+        "start_open_notebook",
     ]
     missing_python = [marker for marker in required_python_markers if marker not in python_text]
     if missing_python:

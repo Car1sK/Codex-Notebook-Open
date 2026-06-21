@@ -14,7 +14,7 @@ Codex Notebook Open 是一个面向 Windows 本地环境的一键启动与集成
 ## 包含内容
 
 - Windows 一键入口：`OpenNotebookLM.bat`
-- Open Notebook、Ollama、Codex MCP、Hermes 的安装/检查/启动/停止脚本
+- 通过 `OpenNotebookLM.bat` 集成 Open Notebook、Ollama、Codex MCP、Hermes 的安装/检查/启动/停止流程
 - `components/` 下的三个上游运行项目源码快照
 - Codex 与 Hermes 的本地 MCP 配置辅助脚本
 - 不包含本地数据库、密钥、虚拟环境、`node_modules`、生成的 HTML 报告
@@ -24,7 +24,7 @@ Codex Notebook Open 是一个面向 Windows 本地环境的一键启动与集成
 ## 快速开始（macOS / Linux）
 
 ```bash
-git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+git clone https://github.com/Car1sK/Codex-Notebook-Open.git
 cd Codex-Notebook-Open
 ./OpenNotebookLM.sh
 ```
@@ -37,6 +37,11 @@ POSIX 启动器支持与 Windows .bat 相同的模式：
 ./OpenNotebookLM.sh --setup-only
 ./OpenNotebookLM.sh --check
 ./OpenNotebookLM.sh --check-live
+./OpenNotebookLM.sh --start-open-notebook
+./OpenNotebookLM.sh --setup-codex-mcp
+./OpenNotebookLM.sh --setup-hermes-mcp
+./OpenNotebookLM.sh --start-hermes
+./OpenNotebookLM.sh --stop-hermes
 ./OpenNotebookLM.sh --stop
 ./OpenNotebookLM.sh --help
 ```
@@ -76,12 +81,12 @@ macOS 和 Linux 用户请通过系统包管理器或上游安装说明安装 Git
 
 新克隆仓库首次启动时，启动器会从 `components/opennotebook`、`components/notebooklm-py`、`components/Hermes_agent` 复制出根目录运行副本。根目录运行副本会被 Git 忽略，因为里面会生成虚拟环境和运行状态。
 
-重复调用启动器是安全的。`OpenNotebookLM.bat` 和 `start_open_notebook.bat` 会使用启动锁和端口探测；第二次调用会等待或复用已有的 Open Notebook 后端/API（端口 `5055`）和前端（端口 `3000`），不会再打开重复的服务窗口。
+重复调用启动器是安全的。`OpenNotebookLM.bat` 会使用启动锁和端口探测；第二次调用会等待或复用已有的 Open Notebook 后端/API（端口 `5055`）和前端（端口 `3000`），不会再打开重复的服务窗口。
 
 ## 快速开始
 
 ```bat
-git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+git clone https://github.com/Car1sK/Codex-Notebook-Open.git
 cd Codex-Notebook-Open
 OpenNotebookLM.bat
 ```
@@ -99,16 +104,19 @@ OpenNotebookLM.bat --setup-only
 OpenNotebookLM.bat --check
 OpenNotebookLM.bat --check-live
 OpenNotebookLM.bat --force-setup
-start_open_notebook.bat
-start_local_agent_stack.bat
-start_ollama_models.bat
-setup_codex_open_notebook_mcp.bat
-setup_hermes_open_notebook_mcp.bat
-start_hermes.bat
-stop_hermes.bat
+OpenNotebookLM.bat --start-open-notebook
+OpenNotebookLM.bat --setup-codex-mcp
+OpenNotebookLM.bat --setup-hermes-mcp
+OpenNotebookLM.bat --start-hermes
+OpenNotebookLM.bat --stop-hermes
 ```
 
 `--check` 或 `--check-install` 用于检查发布包/安装准备状态，不要求服务已经运行。需要确认数据库、API、前端、MCP 桥接和 Hermes 当前正在运行时，使用 `--check-live`。
+
+发布包根目录只保留两个 Windows 批处理文件：
+
+- `OpenNotebookLM.bat`：普通用户入口，负责安装、启动、检查、MCP 刷新和 Hermes 启停。
+- `delegate_to_hermes.bat`：Codex 委派 Hermes 时使用的兼容包装入口。
 
 ## 运行数据和密钥
 

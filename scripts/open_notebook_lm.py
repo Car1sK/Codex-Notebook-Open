@@ -579,10 +579,8 @@ def run_check() -> int:
         ROOT / "notebooklm-py" / "pyproject.toml",
         ROOT / "Hermes_agent" / "pyproject.toml",
         venv_python("opennotebook"),
-        ROOT / "Hermes_agent" / "scripts" / "hermes.exe" if sys.platform == "win32" else ROOT / "Hermes_agent" / ".venv" / "bin" / "hermes",
+        _hermes_executable(),
     ]
-    if sys.platform == "win32":
-        key_files.append(ROOT / "Hermes_agent" / ".venv" / "Scripts" / "hermes.exe")
     for f in key_files:
         status = "OK" if f.exists() else "MISSING"
         if not f.exists():
@@ -628,11 +626,263 @@ def run_check() -> int:
         print("  (Ollama port 11434 is not listening -- skipping model checks)")
 
     print()
+    print("=== Checking Codex MCP configuration ===")
+    try:
+        result = subprocess.run(
+            ["codex", "mcp", "get", "notebooklm"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        print(f"  [MISSING] Codex MCP check could not run: {exc}")
+        issues += 1
+    else:
+        if result.returncode == 0:
+            print('  [OK] Codex MCP server "notebooklm" is configured.')
+        else:
+            print('  [MISSING] Codex MCP server "notebooklm" is not configured.')
+            issues += 1
+
+    print()
+    print("=== Checking notebooklm-py Open Notebook bridge ===")
+    notebooklm_dir = ROOT / "notebooklm-py"
+    if notebooklm_dir.is_dir() and which("uv"):
+        env = _open_notebook_auth_env()
+        notebooks = subprocess.run(
+            ["uv", "run", "notebooklm", "open-notebook", "notebooks", "--json"],
+            cwd=str(notebooklm_dir),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if notebooks.returncode == 0:
+            print("  [OK] notebooklm-py can read Open Notebook notebooks.")
+        else:
+            print("  [FAILED] notebooklm-py could not read Open Notebook notebooks.")
+            issues += 1
+
+        manifest = subprocess.run(
+            ["uv", "run", "python", "scripts/check_open_notebook_mcp_tools.py"],
+            cwd=str(notebooklm_dir),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if manifest.returncode == 0:
+            print("  [OK] notebooklm-py Open Notebook MCP tool manifest is complete.")
+        else:
+            print("  [FAILED] notebooklm-py Open Notebook MCP tool manifest is incomplete.")
+            issues += 1
+    else:
+        print("  [MISSING] notebooklm-py runtime or uv was not found.")
+        issues += 1
+
+    print()
+    print("=== Checking Hermes Open Notebook MCP connection ===")
+    hermes_exe = _hermes_executable()
+    if hermes_exe.exists():
+        test = subprocess.run(
+            [str(hermes_exe), "mcp", "test", "open_notebook"],
+            cwd=str(ROOT),
+            env=_open_notebook_auth_env(),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if test.returncode == 0:
+            print('  [OK] Hermes can connect to MCP server "open_notebook".')
+        else:
+            print('  [FAILED] Hermes could not connect to MCP server "open_notebook".')
+            issues += 1
+
+        hermes_python = venv_python("Hermes_agent")
+        checker = ROOT / "scripts" / "check_hermes_open_notebook_mcp.py"
+        if hermes_python.exists() and checker.exists():
+            tool_call = subprocess.run(
+                [str(hermes_python), str(checker)],
+                cwd=str(ROOT / "Hermes_agent"),
+                env=_open_notebook_auth_env(),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if tool_call.returncode == 0:
+                print("  [OK] Hermes Open Notebook MCP tools can list state.")
+            else:
+                print("  [FAILED] Hermes Open Notebook MCP tool calls failed.")
+                issues += 1
+        else:
+            print("  [MISSING] Hermes Python environment or MCP checker is missing.")
+            issues += 1
+    else:
+        print(f"  [MISSING] Hermes executable: {hermes_exe}")
+        issues += 1
+
+    print()
     if issues == 0:
         print("All checks passed.")
     else:
         print(f"{issues} check(s) failed.")
     return issues
+
+
+def _open_notebook_auth_env() -> dict[str, str]:
+    """Return an environment with Open Notebook auth variables loaded."""
+    env = os.environ.copy()
+    env.update(load_env_file(ROOT / "opennotebook" / ".env"))
+    env.setdefault("OPEN_NOTEBOOK_URL", "http://localhost:5055")
+    if "LOCALAPPDATA" in env:
+        env.setdefault("HERMES_HOME", str(Path(env["LOCALAPPDATA"]) / "hermes"))
+    else:
+        env.setdefault("HERMES_HOME", str(Path.home() / ".hermes"))
+    return env
+
+
+def _hermes_executable() -> Path:
+    scripts = "Scripts" if sys.platform == "win32" else "bin"
+    exe = "hermes.exe" if sys.platform == "win32" else "hermes"
+    return ROOT / "Hermes_agent" / ".venv" / scripts / exe
+
+
+def setup_codex_mcp() -> int:
+    """Install or refresh the notebooklm-py MCP server for Codex."""
+    notebooklm_dir = ROOT / "notebooklm-py"
+    if not notebooklm_dir.is_dir():
+        print(f"ERROR: notebooklm-py was not found at {notebooklm_dir}", file=sys.stderr)
+        return 1
+    if not (ROOT / "opennotebook" / ".env").is_file():
+        print("ERROR: opennotebook/.env is missing. Run setup first.", file=sys.stderr)
+        return 1
+    if not which("uv"):
+        print("ERROR: uv is missing.", file=sys.stderr)
+        return 1
+
+    print("[MCP] Installing local notebooklm-py MCP server for Codex...")
+    result = subprocess.run(
+        ["uv", "run", "notebooklm", "mcp", "install-codex"],
+        cwd=str(notebooklm_dir),
+        env=_open_notebook_auth_env(),
+        check=False,
+    )
+    if result.returncode == 0:
+        print("[MCP] Codex MCP connection refreshed. Restart Codex or open a new thread if needed.")
+    return result.returncode
+
+
+def setup_hermes_mcp() -> int:
+    """Install or refresh the Open Notebook MCP server for Hermes."""
+    hermes_dir = ROOT / "Hermes_agent"
+    hermes_exe = _hermes_executable()
+    notebooklm_python = venv_python("notebooklm-py")
+    if not hermes_exe.exists():
+        print(f"ERROR: Hermes executable was not found at {hermes_exe}", file=sys.stderr)
+        return 1
+    if not notebooklm_python.exists():
+        print(f"ERROR: notebooklm-py Python environment was not found at {notebooklm_python}", file=sys.stderr)
+        return 1
+    if not (ROOT / "opennotebook" / ".env").is_file():
+        print("ERROR: opennotebook/.env is missing. Run setup first.", file=sys.stderr)
+        return 1
+
+    hermes_python = venv_python("Hermes_agent")
+    if not hermes_python.exists():
+        print(f"ERROR: Hermes Python environment was not found at {hermes_python}", file=sys.stderr)
+        return 1
+
+    print("[MCP] Ensuring Hermes MCP support is installed...")
+    has_mcp = subprocess.run(
+        [str(hermes_python), "-c", "import mcp"],
+        cwd=str(hermes_dir),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if has_mcp.returncode != 0:
+        if not which("uv"):
+            print("ERROR: uv is missing.", file=sys.stderr)
+            return 1
+        sync = subprocess.run(["uv", "sync", "--extra", "mcp"], cwd=str(hermes_dir), check=False)
+        if sync.returncode != 0:
+            return sync.returncode
+
+    env = _open_notebook_auth_env()
+    for command in ([str(hermes_exe), "config", "path"], [str(hermes_exe), "config", "env-path"]):
+        result = subprocess.run(command, cwd=str(ROOT), env=env, stdout=subprocess.DEVNULL, check=False)
+        if result.returncode != 0:
+            return result.returncode
+
+    print("[MCP] Installing Open Notebook MCP server for Hermes...")
+    result = subprocess.run(
+        [str(notebooklm_python), str(ROOT / "scripts" / "setup_hermes_open_notebook_mcp.py")],
+        cwd=str(ROOT),
+        env=env,
+        check=False,
+    )
+    if result.returncode == 0:
+        print('[MCP] Hermes Open Notebook MCP connection configured as "open_notebook".')
+    return result.returncode
+
+
+def start_hermes(args: list[str] | None = None) -> int:
+    """Start Hermes in a separate Windows terminal when possible."""
+    args = args or []
+    hermes_exe = _hermes_executable()
+    if not hermes_exe.exists():
+        print(f"ERROR: Hermes executable was not found at {hermes_exe}", file=sys.stderr)
+        return 1
+
+    if sys.platform == "win32":
+        run_script = ROOT / "scripts" / "hermes_runtime.ps1"
+        if not run_script.exists():
+            print(f"ERROR: Hermes runtime script was not found at {run_script}", file=sys.stderr)
+            return 1
+        wt = which("wt.exe")
+        command = [
+            "powershell.exe", "-NoLogo", "-NoExit", "-ExecutionPolicy", "Bypass",
+            "-File", str(run_script), "-Action", "start", *args,
+        ]
+        if wt:
+            subprocess.Popen([wt, "-w", "0", "new-tab", "--title", "Hermes Agent", *command], cwd=str(ROOT))
+            print("[Hermes] Started in Windows Terminal.")
+            return 0
+        subprocess.Popen(command, cwd=str(ROOT), creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        print("[Hermes] Started in PowerShell.")
+        return 0
+
+    env = _open_notebook_auth_env()
+    subprocess.Popen([str(hermes_exe), *args], cwd=str(ROOT / "Hermes_agent"), env=env)
+    print("[Hermes] Started.")
+    return 0
+
+
+def stop_hermes() -> int:
+    """Stop Hermes processes for this local checkout."""
+    if sys.platform == "win32":
+        run_script = ROOT / "scripts" / "hermes_runtime.ps1"
+        if not run_script.exists():
+            print(f"ERROR: Hermes runtime script was not found at {run_script}", file=sys.stderr)
+            return 1
+        return subprocess.run(
+            [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(run_script), "-Action", "stop",
+            ],
+            cwd=str(ROOT),
+            check=False,
+        ).returncode
+
+    # Best effort for POSIX: stop PID-recorded services only.
+    stop_services()
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -741,7 +991,12 @@ def print_usage() -> None:
     print("  --check        Check package/setup readiness; does not require live services.")
     print("  --check-install  Alias for --check.")
     print("  --check-live   Check the running local stack, ports, and integrations.")
-    print("  --stop         Stop services started by this project (via PID files; macOS/Linux only).")
+    print("  --start-open-notebook  Start Ollama and Open Notebook only.")
+    print("  --setup-codex-mcp  Refresh the Codex MCP connection.")
+    print("  --setup-hermes-mcp  Refresh the Hermes MCP connection.")
+    print("  --start-hermes  Start Hermes in a separate terminal.")
+    print("  --stop-hermes   Stop Hermes processes for this checkout.")
+    print("  --stop         Stop services started by this project via PID files.")
     print("  --help, -h     Show this message.")
 
 
@@ -756,6 +1011,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--check-install", action="store_true")
     parser.add_argument("--check-live", action="store_true")
+    parser.add_argument("--start-open-notebook", action="store_true")
+    parser.add_argument("--setup-codex-mcp", action="store_true")
+    parser.add_argument("--setup-hermes-mcp", action="store_true")
+    parser.add_argument("--start-hermes", action="store_true")
+    parser.add_argument("--stop-hermes", action="store_true")
     parser.add_argument("--stop", action="store_true")
     parser.add_argument("--help", action="store_true")
     parser.add_argument("-h", action="store_true")
@@ -775,8 +1035,18 @@ def main() -> int:
         print_usage()
         return 1
 
-    if (args.check or args.check_install) and args.check_live:
-        print("ERROR: Use either --check/--check-install or --check-live, not both.", file=sys.stderr)
+    exclusive = [
+        args.check or args.check_install,
+        args.check_live,
+        args.start_open_notebook,
+        args.setup_codex_mcp,
+        args.setup_hermes_mcp,
+        args.start_hermes,
+        args.stop_hermes,
+        args.stop,
+    ]
+    if sum(1 for flag in exclusive if flag) > 1:
+        print("ERROR: Use only one action flag at a time.", file=sys.stderr)
         print_usage()
         return 1
 
@@ -784,23 +1054,26 @@ def main() -> int:
         _prepare_windows_path()
 
     if args.stop:
-        if sys.platform == "win32":
-            print("ERROR: --stop is not supported on Windows through this launcher.", file=sys.stderr)
-            return 1
         stop_services()
         return 0
+
+    if args.stop_hermes:
+        return stop_hermes()
 
     if args.check or args.check_install:
         return run_install_check()
 
     if args.check_live:
-        if sys.platform == "win32":
-            check_bat = ROOT / "check_local_agent_stack.bat"
-            env = os.environ.copy()
-            env["OPENNOTEBOOK_NO_PAUSE"] = "1"
-            result = subprocess.run(["cmd", "/c", str(check_bat)], cwd=str(ROOT), env=env)
-            return result.returncode
         return run_check()
+
+    if args.setup_codex_mcp:
+        return setup_codex_mcp()
+
+    if args.setup_hermes_mcp:
+        return setup_hermes_mcp()
+
+    if args.start_hermes:
+        return start_hermes()
 
     # Default: setup + start (or setup-only)
 
@@ -839,10 +1112,7 @@ def main() -> int:
 
     print()
     print("[OpenNotebookLM] Starting local stack...")
-    if sys.platform == "win32":
-        start_bat = ROOT / "start_local_agent_stack.bat"
-        result = subprocess.run(["cmd", "/c", str(start_bat)], cwd=str(ROOT))
-        return result.returncode
+    _ensure_ollama_model()
 
     lock_acquired = acquire_launcher_lock()
     if not lock_acquired:
@@ -852,7 +1122,13 @@ def main() -> int:
         start_services()
     finally:
         release_launcher_lock()
-    return 0
+    if args.start_open_notebook:
+        return 0
+
+    codex_result = setup_codex_mcp()
+    hermes_mcp_result = setup_hermes_mcp()
+    hermes_result = start_hermes()
+    return codex_result or hermes_mcp_result or hermes_result
 
 
 if __name__ == "__main__":

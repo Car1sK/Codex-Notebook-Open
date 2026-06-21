@@ -23,8 +23,8 @@ if not errorlevel 1 set "PYTHON=py" & set "PYTHON_ARGS=-3" & goto :found_python
 :: Try AppData install
 if exist "%APPDATA%\Python\Python313\python.exe" set "PYTHON=%APPDATA%\Python\Python313\python.exe" & goto :found_python
 
-echo ERROR: No Python interpreter found. Install Python 3.8+.
-echo Try: winget install Python.Python.3.13
+echo ERROR: No Python interpreter found. Install Python 3.11 or 3.12.
+echo Try: winget install Python.Python.3.12
 exit /b 1
 
 :found_python

@@ -22,17 +22,8 @@ FALLBACK_FILES: list[str] = [
     "README.zh-CN.md",
     "REPOSITORIES.md",
     "THIRD_PARTY.md",
-    "check_local_agent_stack.bat",
     "delegate_to_hermes.bat",
     "delegate_to_hermes.ps1",
-    "hermes.bat",
-    "setup_codex_open_notebook_mcp.bat",
-    "setup_hermes_open_notebook_mcp.bat",
-    "start_hermes.bat",
-    "start_local_agent_stack.bat",
-    "start_ollama_models.bat",
-    "start_open_notebook.bat",
-    "stop_hermes.bat",
 ]
 
 INCLUDE_DIRS = ["components", "scripts"]

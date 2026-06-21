@@ -14,7 +14,7 @@ The goal is a practical local stack: users manage sources, notebooks, and final 
 ## What is included
 
 - One-click Windows entrypoint: `OpenNotebookLM.bat`
-- Setup/check/start/stop helpers for Open Notebook, Ollama, Codex MCP, and Hermes
+- Integrated setup/check/start/stop flow through `OpenNotebookLM.bat`
 - Source snapshots of the three upstream runtime projects under `components/`
 - Local MCP setup helpers for Codex and Hermes
 - No local database, no secrets, no virtual environments, no `node_modules`, and no generated HTML reports
@@ -24,7 +24,7 @@ The bundled snapshots are trimmed for local runtime use. Large upstream test sui
 ## Quick start (macOS / Linux)
 
 ```bash
-git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+git clone https://github.com/Car1sK/Codex-Notebook-Open.git
 cd Codex-Notebook-Open
 ./OpenNotebookLM.sh
 ```
@@ -37,6 +37,11 @@ The POSIX launcher supports the same modes as the Windows .bat:
 ./OpenNotebookLM.sh --setup-only
 ./OpenNotebookLM.sh --check
 ./OpenNotebookLM.sh --check-live
+./OpenNotebookLM.sh --start-open-notebook
+./OpenNotebookLM.sh --setup-codex-mcp
+./OpenNotebookLM.sh --setup-hermes-mcp
+./OpenNotebookLM.sh --start-hermes
+./OpenNotebookLM.sh --stop-hermes
 ./OpenNotebookLM.sh --stop
 ./OpenNotebookLM.sh --help
 ```
@@ -76,12 +81,12 @@ The launcher installs or repairs project-local dependencies with `uv` and `npm c
 
 On a fresh clone, the launcher prepares local runnable working copies from `components/opennotebook`, `components/notebooklm-py`, and `components/Hermes_agent`. Those root-level working copies are ignored by Git because they contain generated environments and runtime state.
 
-Repeated launcher calls are safe. `OpenNotebookLM.bat` and `start_open_notebook.bat` use startup locks plus port probes so a second invocation waits for or reuses the existing Open Notebook backend/API on port `5055` and frontend on port `3000` instead of opening duplicate service windows.
+Repeated launcher calls are safe. `OpenNotebookLM.bat` uses startup locks plus port probes so a second invocation waits for or reuses the existing Open Notebook backend/API on port `5055` and frontend on port `3000` instead of opening duplicate service windows.
 
 ## Quick start
 
 ```bat
-git clone https://github.com/Alasyoki/Codex-Notebook-Open.git
+git clone https://github.com/Car1sK/Codex-Notebook-Open.git
 cd Codex-Notebook-Open
 OpenNotebookLM.bat
 ```
@@ -99,16 +104,19 @@ OpenNotebookLM.bat --setup-only
 OpenNotebookLM.bat --check
 OpenNotebookLM.bat --check-live
 OpenNotebookLM.bat --force-setup
-start_open_notebook.bat
-start_local_agent_stack.bat
-start_ollama_models.bat
-setup_codex_open_notebook_mcp.bat
-setup_hermes_open_notebook_mcp.bat
-start_hermes.bat
-stop_hermes.bat
+OpenNotebookLM.bat --start-open-notebook
+OpenNotebookLM.bat --setup-codex-mcp
+OpenNotebookLM.bat --setup-hermes-mcp
+OpenNotebookLM.bat --start-hermes
+OpenNotebookLM.bat --stop-hermes
 ```
 
 Use `--check` or `--check-install` for package/setup readiness checks that do not require live services. Use `--check-live` when you want to verify that the database, API, frontend, MCP bridges, and Hermes are currently running.
+
+Only two root-level Windows batch files are shipped:
+
+- `OpenNotebookLM.bat` — normal user entrypoint for setup, startup, checks, MCP refresh, and Hermes start/stop.
+- `delegate_to_hermes.bat` — compatibility wrapper used by Codex delegation workflows.
 
 ## Runtime data and secrets
 

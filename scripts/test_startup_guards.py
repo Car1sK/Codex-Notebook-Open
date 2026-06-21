@@ -1,32 +1,27 @@
 from __future__ import annotations
 
-import os
+import importlib.util
 import socket
-import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_ROOT = ROOT / "open-notebook-data"
-START_BAT = ROOT / "start_open_notebook.bat"
+LAUNCHER = ROOT / "scripts" / "open_notebook_lm.py"
 
 
 class PortHolder(threading.Thread):
-    """Hold a local TCP port open long enough for batch startup guards to probe it."""
+    """Hold a local TCP port open long enough for launcher probes to see it."""
 
-    def __init__(self, port: int, *, delay: float = 0.0, duration: float = 5.0) -> None:
+    def __init__(self, port: int, *, duration: float = 5.0) -> None:
         super().__init__(daemon=True)
         self.port = port
-        self.delay = delay
         self.duration = duration
         self.ready = threading.Event()
         self.stop_requested = threading.Event()
         self.error: Exception | None = None
 
     def run(self) -> None:
-        time.sleep(self.delay)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -52,120 +47,70 @@ class PortHolder(threading.Thread):
         self.stop_requested.set()
 
 
-def is_port_open(port: int) -> bool:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(0.5)
+def load_launcher_module():
+    spec = importlib.util.spec_from_file_location("open_notebook_lm", LAUNCHER)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load launcher module: {LAUNCHER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_port_probe(module) -> None:
+    holder = PortHolder(5055)
+    holder.start()
+    if not holder.ready.wait(timeout=5):
+        raise RuntimeError("test listener did not become ready")
     try:
-        sock.connect(("127.0.0.1", port))
-    except OSError:
-        return False
-    finally:
-        sock.close()
-    return True
-
-
-def run_subcommand(target: str, timeout: int = 25) -> str:
-    result = subprocess.run(
-        ["cmd.exe", "/d", "/c", "call", str(START_BAT), target],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-    )
-    output = (result.stdout + result.stderr).strip()
-    if result.returncode != 0:
-        raise RuntimeError(f"{target} returned {result.returncode}:\n{output}")
-    return output
-
-
-def assert_contains(output: str, marker: str) -> None:
-    if marker not in output:
-        raise RuntimeError(f"missing marker {marker!r} in output:\n{output}")
-
-
-def test_existing_port_reuse(target: str, port: int, marker: str) -> None:
-    holder: PortHolder | None = None
-    if not is_port_open(port):
-        holder = PortHolder(port, duration=5.0)
-        holder.start()
-        if not holder.ready.wait(timeout=5):
-            raise RuntimeError(f"test listener for port {port} did not become ready")
         if holder.error:
-            raise RuntimeError(f"test listener for port {port} failed: {holder.error}")
-
-    output = run_subcommand(target)
-    assert_contains(output, marker)
-
-    if holder:
+            raise RuntimeError(f"test listener failed: {holder.error}")
+        if not module.is_port_listening("127.0.0.1", 5055):
+            raise RuntimeError("launcher port probe did not detect the held port")
+    finally:
         holder.stop()
         holder.join(timeout=6)
 
 
-def test_startup_lock_wait(target: str, port: int, lock_name: str, wait_marker: str, done_marker: str) -> None:
-    if is_port_open(port):
-        print(f"[skip] {target} lock-wait case: port {port} is already in use.")
-        return
-
-    DATA_ROOT.mkdir(exist_ok=True)
-    lock_dir = DATA_ROOT / lock_name
+def test_launcher_lock(module) -> None:
+    module.DATA_ROOT.mkdir(exist_ok=True)
+    lock_dir = module.DATA_ROOT / "launcher.lock"
     if lock_dir.exists():
-        print(f"[skip] {target} lock-wait case: {lock_dir} already exists.")
+        print(f"[skip] launcher lock test: {lock_dir} already exists.")
         return
 
-    lock_dir.mkdir()
-    holder = PortHolder(port, delay=1.0, duration=6.0)
+    if not module.acquire_launcher_lock():
+        raise RuntimeError("first launcher lock acquisition failed")
     try:
-        holder.start()
-        output = run_subcommand(target)
-        assert_contains(output, wait_marker)
-        assert_contains(output, done_marker)
-        if holder.error:
-            raise RuntimeError(f"test listener for port {port} failed: {holder.error}")
+        if module.acquire_launcher_lock():
+            raise RuntimeError("second launcher lock acquisition should have failed")
     finally:
-        holder.stop()
-        holder.join(timeout=7)
-        try:
-            lock_dir.rmdir()
-        except FileNotFoundError:
-            pass
+        module.release_launcher_lock()
+
+    if not module.acquire_launcher_lock():
+        raise RuntimeError("launcher lock was not reusable after release")
+    module.release_launcher_lock()
+
+
+def test_required_markers() -> None:
+    text = LAUNCHER.read_text(encoding="utf-8")
+    markers = [
+        "Open Notebook backend/API port 5055 is already listening; reusing it.",
+        "Open Notebook frontend port 3000 is already listening; reusing it.",
+        "Another launcher is already starting Open Notebook; waiting for it.",
+        "setup_codex_mcp",
+        "setup_hermes_mcp",
+        "start_hermes",
+    ]
+    missing = [marker for marker in markers if marker not in text]
+    if missing:
+        raise RuntimeError("launcher is missing startup guard markers: " + ", ".join(missing))
 
 
 def main() -> int:
-    if os.name != "nt":
-        print("[skip] startup guard smoke tests are Windows batch tests.")
-        return 0
-
-    if not START_BAT.is_file():
-        raise RuntimeError(f"missing launcher: {START_BAT}")
-
-    test_existing_port_reuse(
-        "backend",
-        5055,
-        "Backend/API is already running on port 5055; no new backend started.",
-    )
-    test_existing_port_reuse(
-        "frontend",
-        3000,
-        "Frontend is already running on port 3000; no new frontend started.",
-    )
-    test_startup_lock_wait(
-        "backend",
-        5055,
-        "backend.lock",
-        "Another backend start is already in progress; waiting for port 5055.",
-        "Backend/API is already running on port 5055; no new backend started.",
-    )
-    test_startup_lock_wait(
-        "frontend",
-        3000,
-        "frontend.lock",
-        "Another frontend start is already in progress; waiting for port 3000.",
-        "Frontend is already running on port 3000; no new frontend started.",
-    )
-
+    module = load_launcher_module()
+    test_port_probe(module)
+    test_launcher_lock(module)
+    test_required_markers()
     print("Startup guard smoke tests passed.")
     return 0
 
@@ -174,5 +119,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {exc}")
         raise SystemExit(1)
