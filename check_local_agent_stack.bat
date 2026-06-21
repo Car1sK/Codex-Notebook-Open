@@ -26,7 +26,7 @@ if errorlevel 1 (
 )
 
 echo [Check] SurrealDB port 8000...
-powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
+call :check_port 8000
 if errorlevel 1 (
   echo ERROR: SurrealDB is not listening on port 8000.
   goto :failed
@@ -34,7 +34,7 @@ if errorlevel 1 (
 echo OK: SurrealDB is listening on port 8000.
 
 echo [Check] Open Notebook API port 5055...
-powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -State Listen -LocalPort 5055 -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
+call :check_port 5055
 if errorlevel 1 (
   echo ERROR: Open Notebook API is not listening on port 5055.
   goto :failed
@@ -42,7 +42,7 @@ if errorlevel 1 (
 echo OK: Open Notebook API is listening on port 5055.
 
 echo [Check] Open Notebook frontend port 3000...
-powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -State Listen -LocalPort 3000 -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
+call :check_port 3000
 if errorlevel 1 (
   echo ERROR: Open Notebook frontend is not listening on port 3000.
   goto :failed
@@ -121,8 +121,12 @@ echo.
 echo Local agent stack check passed.
 exit /b 0
 
+:check_port
+powershell.exe -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $r=$c.BeginConnect('127.0.0.1',%~1,$null,$null); if ($r.AsyncWaitHandle.WaitOne(750,$false)) { $c.EndConnect($r); exit 0 }; exit 1 } catch { exit 1 } finally { $c.Close() }" >nul 2>nul
+exit /b %errorlevel%
+
 :failed
 echo.
 echo Local agent stack check failed. Review the message above.
-pause
+if not "%OPENNOTEBOOK_NO_PAUSE%"=="1" pause
 exit /b 1

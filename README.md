@@ -36,6 +36,7 @@ The POSIX launcher supports the same modes as the Windows .bat:
 ```bash
 ./OpenNotebookLM.sh --setup-only
 ./OpenNotebookLM.sh --check
+./OpenNotebookLM.sh --check-live
 ./OpenNotebookLM.sh --stop
 ./OpenNotebookLM.sh --help
 ```
@@ -75,6 +76,7 @@ Useful commands:
 ```bat
 OpenNotebookLM.bat --setup-only
 OpenNotebookLM.bat --check
+OpenNotebookLM.bat --check-live
 OpenNotebookLM.bat --force-setup
 start_open_notebook.bat
 start_local_agent_stack.bat
@@ -84,6 +86,8 @@ setup_hermes_open_notebook_mcp.bat
 start_hermes.bat
 stop_hermes.bat
 ```
+
+Use `--check` or `--check-install` for package/setup readiness checks that do not require live services. Use `--check-live` when you want to verify that the database, API, frontend, MCP bridges, and Hermes are currently running.
 
 ## Runtime data and secrets
 

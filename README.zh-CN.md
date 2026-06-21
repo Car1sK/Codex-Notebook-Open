@@ -36,6 +36,7 @@ POSIX 启动器支持与 Windows .bat 相同的模式：
 ```bash
 ./OpenNotebookLM.sh --setup-only
 ./OpenNotebookLM.sh --check
+./OpenNotebookLM.sh --check-live
 ./OpenNotebookLM.sh --stop
 ./OpenNotebookLM.sh --help
 ```
@@ -75,6 +76,7 @@ http://localhost:3000
 ```bat
 OpenNotebookLM.bat --setup-only
 OpenNotebookLM.bat --check
+OpenNotebookLM.bat --check-live
 OpenNotebookLM.bat --force-setup
 start_open_notebook.bat
 start_local_agent_stack.bat
@@ -84,6 +86,8 @@ setup_hermes_open_notebook_mcp.bat
 start_hermes.bat
 stop_hermes.bat
 ```
+
+`--check` 或 `--check-install` 用于检查发布包/安装准备状态，不要求服务已经运行。需要确认数据库、API、前端、MCP 桥接和 Hermes 当前正在运行时，使用 `--check-live`。
 
 ## 运行数据和密钥
 

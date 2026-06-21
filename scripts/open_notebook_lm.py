@@ -484,8 +484,90 @@ def stop_services() -> None:
 # Check
 # ---------------------------------------------------------------------------
 
+def _print_path_status(label: str, path: Path, *, required: bool = True) -> bool:
+    """Print a path status line. Returns True when the path exists."""
+    exists = path.exists()
+    if exists:
+        status = "OK"
+    else:
+        status = "MISSING" if required else "PENDING"
+    print(f"  [{status}] {label}: {path}")
+    return exists
+
+
+def run_install_check() -> int:
+    """Check package/setup readiness without requiring live services."""
+    issues = 0
+    pending = 0
+
+    print("=== Checking package files ===")
+    package_files = [
+        ROOT / "OpenNotebookLM.bat",
+        ROOT / "OpenNotebookLM.sh",
+        ROOT / "README.md",
+        ROOT / "README.zh-CN.md",
+        ROOT / "scripts" / "open_notebook_lm.py",
+        ROOT / "scripts" / "ensure_open_notebook_env.py",
+        ROOT / "scripts" / "build_release.py",
+    ]
+    for path in package_files:
+        if not _print_path_status(path.name, path):
+            issues += 1
+
+    print()
+    print("=== Checking bundled source snapshots ===")
+    for target_dir, source_dir, _has_frontend, marker in PROJECTS:
+        marker_path = ROOT / source_dir / marker
+        if not _print_path_status(f"{target_dir} source snapshot", marker_path):
+            issues += 1
+
+    print()
+    print("=== Checking prepared runtime working copies ===")
+    for target_dir, _source_dir, _has_frontend, marker in PROJECTS:
+        marker_path = ROOT / target_dir / marker
+        if not _print_path_status(f"{target_dir} runtime copy", marker_path, required=False):
+            pending += 1
+    frontend_modules = ROOT / "opennotebook" / "frontend" / "node_modules"
+    if not _print_path_status("Open Notebook frontend dependencies", frontend_modules, required=False):
+        pending += 1
+    if not _print_path_status("Open Notebook Python environment", venv_python("opennotebook"), required=False):
+        pending += 1
+
+    print()
+    print("=== Checking external tools visible now ===")
+    tools = check_tools()
+    missing_tools: list[str] = []
+    for tool, path in tools.items():
+        status = "OK" if path else "MISSING"
+        if not path:
+            missing_tools.append(tool)
+        print(f"  [{status}] {tool}: {path or 'not found'}")
+
+    if sys.platform == "win32" and any(tool in missing_tools for tool in ("node", "npm", "surreal", "ollama")):
+        winget_path = which("winget")
+        status = "OK" if winget_path else "MISSING"
+        print(f"  [{status}] winget: {winget_path or 'not found'}")
+        if winget_path is None:
+            issues += 1
+    elif sys.platform != "win32" and missing_tools:
+        issues += len(missing_tools)
+
+    print()
+    if pending:
+        setup_cmd = "OpenNotebookLM.bat --setup-only" if sys.platform == "win32" else "./OpenNotebookLM.sh --setup-only"
+        print(
+            f"{pending} setup item(s) are not prepared yet. "
+            f"Run {setup_cmd} before starting services."
+        )
+    if issues == 0:
+        print("Install/package check passed.")
+    else:
+        print(f"{issues} install/package check(s) failed.")
+    return issues
+
+
 def run_check() -> int:
-    """Run the local stack check."""
+    """Run the live local stack check."""
     issues = 0
 
     # 1. Key files
@@ -656,7 +738,9 @@ def print_usage() -> None:
     print("Flags:")
     print("  --setup-only   Install/repair dependencies, but do not start services.")
     print("  --force-setup  Re-run setup checks for missing pieces, then start services.")
-    print("  --check        Run the local stack check only.")
+    print("  --check        Check package/setup readiness; does not require live services.")
+    print("  --check-install  Alias for --check.")
+    print("  --check-live   Check the running local stack, ports, and integrations.")
     print("  --stop         Stop services started by this project (via PID files; macOS/Linux only).")
     print("  --help, -h     Show this message.")
 
@@ -670,6 +754,8 @@ def main() -> int:
     parser.add_argument("--setup-only", action="store_true")
     parser.add_argument("--force-setup", action="store_true")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--check-install", action="store_true")
+    parser.add_argument("--check-live", action="store_true")
     parser.add_argument("--stop", action="store_true")
     parser.add_argument("--help", action="store_true")
     parser.add_argument("-h", action="store_true")
@@ -689,6 +775,14 @@ def main() -> int:
         print_usage()
         return 1
 
+    if (args.check or args.check_install) and args.check_live:
+        print("ERROR: Use either --check/--check-install or --check-live, not both.", file=sys.stderr)
+        print_usage()
+        return 1
+
+    if sys.platform == "win32":
+        _prepare_windows_path()
+
     if args.stop:
         if sys.platform == "win32":
             print("ERROR: --stop is not supported on Windows through this launcher.", file=sys.stderr)
@@ -696,18 +790,19 @@ def main() -> int:
         stop_services()
         return 0
 
-    if args.check:
+    if args.check or args.check_install:
+        return run_install_check()
+
+    if args.check_live:
         if sys.platform == "win32":
             check_bat = ROOT / "check_local_agent_stack.bat"
-            result = subprocess.run(["cmd", "/c", str(check_bat)], cwd=str(ROOT))
+            env = os.environ.copy()
+            env["OPENNOTEBOOK_NO_PAUSE"] = "1"
+            result = subprocess.run(["cmd", "/c", str(check_bat)], cwd=str(ROOT), env=env)
             return result.returncode
         return run_check()
 
     # Default: setup + start (or setup-only)
-
-    # Prepare Windows PATH before tool checks
-    if sys.platform == "win32":
-        _prepare_windows_path()
 
     # Detect if setup is needed
     needs_setup = args.force_setup or not BOOTSTRAP_MARKER.exists()

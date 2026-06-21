@@ -170,6 +170,10 @@ def check_release_dry_run() -> None:
     run_command([sys.executable, "scripts/build_release.py", "--dry-run"], "Release dry run")
 
 
+def check_startup_guard_smoke() -> None:
+    run_command([sys.executable, "scripts/test_startup_guards.py"], "Startup guard smoke test")
+
+
 def check_launcher_shape() -> None:
     """Verify the thin-wrapper launcher shape: OpenNotebookLM.bat delegates to Python."""
     bat_path = ROOT / "OpenNotebookLM.bat"
@@ -241,6 +245,7 @@ def main() -> int:
         (".gitignore runtime exclusions", check_gitignore),
         ("tracked runtime exclusions", check_tracked_files),
         ("Python script syntax", check_python_scripts),
+        ("startup guard smoke test", check_startup_guard_smoke),
         ("release dry run", check_release_dry_run),
     ]
 
