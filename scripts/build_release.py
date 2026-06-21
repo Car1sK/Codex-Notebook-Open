@@ -15,7 +15,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # Must match what the .gitignore allows and what the repo publishes.
 FALLBACK_FILES: list[str] = [
     ".gitignore",
-    "AGENTS.md",
     "LICENSE",
     "OpenNotebookLM.bat",
     "OpenNotebookLM.sh",
@@ -62,6 +61,8 @@ def git_tracked_files(root: Path) -> list[str] | None:
             continue
         if line.startswith(".git/") or line == ".git":
             continue
+        if line == "AGENTS.md" or line.endswith("/AGENTS.md"):
+            continue
         # Also filter excluded patterns like dist/
         if line.startswith("dist/"):
             continue
@@ -81,6 +82,8 @@ def fallback_files(root: Path) -> list[str]:
                 continue
             rel = str(file_path.relative_to(root)).replace("\\", "/")
             # Skip patterns that .gitignore excludes
+            if rel == "AGENTS.md" or rel.endswith("/AGENTS.md"):
+                continue
             if "/.venv/" in rel or "/node_modules/" in rel or "/__pycache__/" in rel:
                 continue
             if rel.endswith(".pyc") or rel.endswith(".out.log") or rel.endswith(".err.log"):

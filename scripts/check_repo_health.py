@@ -30,6 +30,8 @@ REQUIRED_GITIGNORE_LINES = [
     "/Hermes_agent/",
     "/notebooklm-py/",
     "/opennotebook/",
+    "AGENTS.md",
+    "**/AGENTS.md",
     "**/.venv/",
     "**/node_modules/",
     "**/__pycache__/",
@@ -142,6 +144,8 @@ def check_tracked_files() -> None:
         path
         for path in tracked
         if any(path.startswith(prefix) for prefix in FORBIDDEN_TRACKED_PREFIXES)
+        or path == "AGENTS.md"
+        or path.endswith("/AGENTS.md")
     ]
     if forbidden:
         fail("Runtime working-copy paths are tracked:\n  " + "\n  ".join(forbidden[:20]))
@@ -167,7 +171,19 @@ def check_python_scripts() -> None:
 
 
 def check_release_dry_run() -> None:
-    run_command([sys.executable, "scripts/build_release.py", "--dry-run"], "Release dry run")
+    result = subprocess.run(
+        [sys.executable, "scripts/build_release.py", "--dry-run"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if result.returncode != 0:
+        output = (result.stdout + result.stderr).strip()
+        fail(f"Release dry run failed with exit code {result.returncode}:\n{output}")
+    if "AGENTS.md" in result.stdout or "AGENTS.md" in result.stderr:
+        fail("Release dry run includes AGENTS.md, which must stay local-only.")
 
 
 def check_startup_guard_smoke() -> None:

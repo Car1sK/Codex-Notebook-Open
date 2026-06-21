@@ -13,6 +13,8 @@ open-notebook-data/
 /opennotebook/
 
 # Local agent/editor state
+AGENTS.md
+**/AGENTS.md
 .agents/
 .codex/
 .ruff_cache/
