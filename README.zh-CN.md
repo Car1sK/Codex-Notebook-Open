@@ -45,11 +45,32 @@ Windows 用户请使用 `OpenNotebookLM.bat`（参见下方说明）。
 
 ## 环境要求
 
-- Windows 10/11、macOS 或 Linux
-- 所有平台都需要 Python 3.8+。Windows 用户可以使用 Python 启动器 `py -3`。
-- Git
-- 首次安装需要联网
-- Windows 推荐安装 `winget`，这样启动器可以自动安装缺失的 Node.js、SurrealDB、Ollama
+在运行 `OpenNotebookLM.bat` 之前，请确保全新 Windows 10/11 系统已安装以下工具。`winget` 是推荐的 Windows 安装路径，因为启动器可以通过它自动安装多个缺失的外部工具。
+
+| 工具 | 状态 | 用途 |
+|------|------|------|
+| Git | 必需 | 克隆仓库和版本管理 |
+| Python 3.11 或 3.12 | 必需 | 运行启动器，并创建 Open Notebook / Hermes 的 Python 环境 |
+| PowerShell 5+ | 必需 | 执行安装脚本；Windows 10/11 自带 |
+| winget | 推荐 | Windows 包管理器；让启动器可以自动安装 Node.js、SurrealDB 和 Ollama |
+| Node.js LTS / npm | 必需，可通过 winget 自动安装 | Open Notebook 前端运行环境 |
+| SurrealDB CLI | 必需，可通过 winget 自动安装 | Open Notebook 本地数据库 |
+| Ollama | 默认本地 embedding 配置必需，可通过 winget 自动安装 | 本地运行 `nomic-embed-text` embedding 模型 |
+| uv | 启动器缺失时会自动安装 | 本项目使用的 Python 包和环境管理工具 |
+| 互联网连接 | 首次安装必需 | 下载 Python 包、npm 模块、外部工具和 Ollama 模型 |
+
+要安装 `winget`，请从 Microsoft Store 获取 **App Installer**，或访问 [winget 文档](https://learn.microsoft.com/zh-cn/windows/package-manager/)。在全新 Windows 机器上，典型的手动准备命令是：
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.12
+```
+
+> 在新安装的系统上，先安装 winget，再运行 `OpenNotebookLM.bat`。启动器会自动完成剩余依赖检查。
+
+正常启动路径不需要 Docker Desktop。
+
+macOS 和 Linux 用户请通过系统包管理器或上游安装说明安装 Git、Python 3.11/3.12、Node.js/npm、SurrealDB CLI、Ollama 和 `uv`。
 
 启动器会用 `uv` 和 `npm ci` 安装或修复项目本地依赖。除了 Node.js、SurrealDB、Ollama、`uv` 这类外部工具外，依赖会放在当前仓库 checkout 内。
 

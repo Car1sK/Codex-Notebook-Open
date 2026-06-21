@@ -43,13 +43,34 @@ The POSIX launcher supports the same modes as the Windows .bat:
 
 Windows users should use `OpenNotebookLM.bat` (see the section below).
 
-## Requirements
+## Prerequisites
 
-- Windows 10/11, macOS, or Linux
-- Python 3.8+ on all platforms. Windows users can use the Python launcher `py -3`.
-- Git
-- Internet access for first-run dependency installation
-- `winget` is recommended on Windows so the launcher can install missing Node.js, SurrealDB, and Ollama
+Before using `OpenNotebookLM.bat`, ensure a fresh Windows 10/11 system has the following tools. `winget` is the recommended Windows setup path because the launcher can use it to install several missing external tools automatically.
+
+| Tool | Status | Purpose |
+|------|--------|---------|
+| Git | Required | Clone the repository and manage version control |
+| Python 3.11 or 3.12 | Required | Run the launcher and create the Open Notebook / Hermes Python environments |
+| PowerShell 5+ | Required | Script execution during setup; included with Windows 10/11 |
+| winget | Recommended | Windows Package Manager; lets the launcher install Node.js, SurrealDB, and Ollama automatically |
+| Node.js LTS / npm | Required, auto-installable with winget | Runtime for the Open Notebook frontend |
+| SurrealDB CLI | Required, auto-installable with winget | Local Open Notebook database |
+| Ollama | Required for the default local embedding setup, auto-installable with winget | Runs the `nomic-embed-text` embedding model locally |
+| uv | Installed by the launcher if missing | Python package/environment manager used by this bundle |
+| Internet access | Required for first setup | Download Python packages, npm modules, external tools, and Ollama models |
+
+To install `winget`, get **App Installer** from the Microsoft Store or see the [winget documentation](https://learn.microsoft.com/en-us/windows/package-manager/). On a fresh Windows machine, a typical manual bootstrap is:
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.12
+```
+
+> On a freshly installed system, install winget first, then run `OpenNotebookLM.bat`. The launcher will handle the remaining dependency checks automatically.
+
+Docker Desktop is not required for the normal launcher path.
+
+macOS and Linux users need Git, Python 3.11/3.12, Node.js/npm, SurrealDB CLI, Ollama, and `uv` installed through their system package manager or the upstream install instructions.
 
 The launcher installs or repairs project-local dependencies with `uv` and `npm ci`. These are local to this checkout except for external tools such as Node.js, SurrealDB, Ollama, and `uv`.
 
