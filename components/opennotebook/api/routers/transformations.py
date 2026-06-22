@@ -1,8 +1,9 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
+from api.auth import require_default_owner_user
 from api.models import (
     DefaultPromptResponse,
     DefaultPromptUpdate,
@@ -47,7 +48,10 @@ async def get_transformations():
 
 
 @router.post("/transformations", response_model=TransformationResponse)
-async def create_transformation(transformation_data: TransformationCreate):
+async def create_transformation(
+    transformation_data: TransformationCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Create a new transformation."""
     try:
         new_transformation = Transformation(
@@ -79,7 +83,10 @@ async def create_transformation(transformation_data: TransformationCreate):
 
 
 @router.post("/transformations/execute", response_model=TransformationExecuteResponse)
-async def execute_transformation(execute_request: TransformationExecuteRequest):
+async def execute_transformation(
+    execute_request: TransformationExecuteRequest,
+    _admin=Depends(require_default_owner_user),
+):
     """Execute a transformation on input text."""
     try:
         # Validate transformation exists
@@ -136,7 +143,10 @@ async def get_default_prompt():
 
 
 @router.put("/transformations/default-prompt", response_model=DefaultPromptResponse)
-async def update_default_prompt(prompt_update: DefaultPromptUpdate):
+async def update_default_prompt(
+    prompt_update: DefaultPromptUpdate,
+    _admin=Depends(require_default_owner_user),
+):
     """Update the default transformation prompt."""
     try:
         default_prompts: DefaultPrompts = await DefaultPrompts.get_instance()  # type: ignore[assignment]
@@ -189,7 +199,9 @@ async def get_transformation(transformation_id: str):
     "/transformations/{transformation_id}", response_model=TransformationResponse
 )
 async def update_transformation(
-    transformation_id: str, transformation_update: TransformationUpdate
+    transformation_id: str,
+    transformation_update: TransformationUpdate,
+    _admin=Depends(require_default_owner_user),
 ):
     """Update a transformation."""
     try:
@@ -233,7 +245,10 @@ async def update_transformation(
 
 
 @router.delete("/transformations/{transformation_id}")
-async def delete_transformation(transformation_id: str):
+async def delete_transformation(
+    transformation_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Delete a transformation."""
     try:
         transformation = await Transformation.get(transformation_id)

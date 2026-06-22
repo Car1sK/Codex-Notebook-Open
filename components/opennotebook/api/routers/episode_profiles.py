@@ -1,9 +1,10 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from api.auth import require_default_owner_user
 from open_notebook.podcasts.models import EpisodeProfile
 
 router = APIRouter()
@@ -98,7 +99,10 @@ class EpisodeProfileCreate(BaseModel):
 
 
 @router.post("/episode-profiles", response_model=EpisodeProfileResponse)
-async def create_episode_profile(profile_data: EpisodeProfileCreate):
+async def create_episode_profile(
+    profile_data: EpisodeProfileCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Create a new episode profile"""
     try:
         profile = EpisodeProfile(
@@ -127,7 +131,11 @@ async def create_episode_profile(profile_data: EpisodeProfileCreate):
 
 
 @router.put("/episode-profiles/{profile_id}", response_model=EpisodeProfileResponse)
-async def update_episode_profile(profile_id: str, profile_data: EpisodeProfileCreate):
+async def update_episode_profile(
+    profile_id: str,
+    profile_data: EpisodeProfileCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Update an existing episode profile"""
     try:
         profile = await EpisodeProfile.get(profile_id)
@@ -153,7 +161,10 @@ async def update_episode_profile(profile_id: str, profile_data: EpisodeProfileCr
 
 
 @router.delete("/episode-profiles/{profile_id}")
-async def delete_episode_profile(profile_id: str):
+async def delete_episode_profile(
+    profile_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Delete an episode profile"""
     try:
         profile = await EpisodeProfile.get(profile_id)
@@ -179,7 +190,10 @@ async def delete_episode_profile(profile_id: str):
 @router.post(
     "/episode-profiles/{profile_id}/duplicate", response_model=EpisodeProfileResponse
 )
-async def duplicate_episode_profile(profile_id: str):
+async def duplicate_episode_profile(
+    profile_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Duplicate an episode profile"""
     try:
         original = await EpisodeProfile.get(profile_id)

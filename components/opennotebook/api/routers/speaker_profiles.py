@@ -1,9 +1,10 @@
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from api.auth import require_default_owner_user
 from open_notebook.podcasts.models import SpeakerProfile
 
 router = APIRouter()
@@ -80,7 +81,10 @@ class SpeakerProfileCreate(BaseModel):
 
 
 @router.post("/speaker-profiles", response_model=SpeakerProfileResponse)
-async def create_speaker_profile(profile_data: SpeakerProfileCreate):
+async def create_speaker_profile(
+    profile_data: SpeakerProfileCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Create a new speaker profile"""
     try:
         profile = SpeakerProfile(
@@ -103,7 +107,11 @@ async def create_speaker_profile(profile_data: SpeakerProfileCreate):
 
 
 @router.put("/speaker-profiles/{profile_id}", response_model=SpeakerProfileResponse)
-async def update_speaker_profile(profile_id: str, profile_data: SpeakerProfileCreate):
+async def update_speaker_profile(
+    profile_id: str,
+    profile_data: SpeakerProfileCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Update an existing speaker profile"""
     try:
         profile = await SpeakerProfile.get(profile_id)
@@ -129,7 +137,10 @@ async def update_speaker_profile(profile_id: str, profile_data: SpeakerProfileCr
 
 
 @router.delete("/speaker-profiles/{profile_id}")
-async def delete_speaker_profile(profile_id: str):
+async def delete_speaker_profile(
+    profile_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Delete a speaker profile"""
     try:
         profile = await SpeakerProfile.get(profile_id)
@@ -155,7 +166,10 @@ async def delete_speaker_profile(profile_id: str):
 @router.post(
     "/speaker-profiles/{profile_id}/duplicate", response_model=SpeakerProfileResponse
 )
-async def duplicate_speaker_profile(profile_id: str):
+async def duplicate_speaker_profile(
+    profile_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Duplicate a speaker profile"""
     try:
         original = await SpeakerProfile.get(profile_id)
