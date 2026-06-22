@@ -18,6 +18,7 @@ class Notebook(ObjectModel):
     name: str
     description: str
     archived: Optional[bool] = False
+    owner_id: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -359,6 +360,7 @@ class Source(ObjectModel):
     title: Optional[str] = None
     topics: Optional[List[str]] = Field(default_factory=list)
     full_text: Optional[str] = None
+    owner_id: Optional[str] = None
     command: Optional[Union[str, RecordID]] = Field(
         default=None, description="Link to surreal-commands processing job"
     )
@@ -625,6 +627,7 @@ class Note(ObjectModel):
     title: Optional[str] = None
     note_type: Optional[Literal["human", "ai"]] = None
     content: Optional[str] = None
+    owner_id: Optional[str] = None
 
     @field_validator("content")
     @classmethod
@@ -681,6 +684,7 @@ class ChatSession(ObjectModel):
     nullable_fields: ClassVar[set[str]] = {"model_override"}
     title: Optional[str] = None
     model_override: Optional[str] = None
+    owner_id: Optional[str] = None
 
     async def relate_to_notebook(self, notebook_id: str) -> Any:
         if not notebook_id:
@@ -706,7 +710,7 @@ async def text_search(
             """,
             {"keyword": keyword, "results": results, "source": source, "note": note},
         )
-        return search_results
+        return await _filter_search_results_by_current_owner(search_results)
     except RuntimeError as e:
         # SurrealDB's search::highlight can compute a byte position that exceeds the
         # stored string length on large or multi-byte chunks, aborting the whole query
@@ -761,8 +765,33 @@ async def vector_search(
                 "minimum_score": minimum_score,
             },
         )
-        return search_results
+        return await _filter_search_results_by_current_owner(search_results)
     except Exception as e:
         logger.error(f"Error performing vector search: {str(e)}")
         logger.exception(e)
         raise DatabaseOperationError(e)
+
+
+async def _filter_search_results_by_current_owner(
+    search_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    filtered: List[Dict[str, Any]] = []
+
+    for result in search_results or []:
+        parent_id = str(result.get("parent_id") or result.get("id") or "")
+        if not parent_id:
+            continue
+
+        try:
+            if parent_id.startswith("source:"):
+                await Source.get(parent_id)
+            elif parent_id.startswith("note:"):
+                await Note.get(parent_id)
+            else:
+                continue
+        except Exception:
+            continue
+
+        filtered.append(result)
+
+    return filtered

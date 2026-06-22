@@ -14,9 +14,10 @@ import { useTranslation } from '@/lib/hooks/use-translation'
 
 export function LoginForm() {
   const { t, language } = useTranslation()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const { login, isLoading, error } = useAuth()
-  const { authRequired, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
+  const { authRequired, authMode, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [configInfo, setConfigInfo] = useState<{ apiUrl: string; version: string; buildTime: string } | null>(null)
   const router = useRouter()
@@ -127,9 +128,9 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (password.trim()) {
+    if (password.trim() && (authMode !== 'multi_user' || username.trim())) {
       try {
-        await login(password)
+        await login(password, authMode === 'multi_user' ? username.trim() : undefined)
       } catch (error) {
         console.error('Unhandled error during login:', error)
         // The auth store should handle most errors, but this catches any unhandled ones
@@ -148,6 +149,19 @@ export function LoginForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {authMode === 'multi_user' && (
+              <div>
+                <Input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="username"
+                />
+              </div>
+            )}
+
             <div>
               <Input
                 type="password"
@@ -155,6 +169,7 @@ export function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
+                autoComplete={authMode === 'multi_user' ? 'current-password' : undefined}
               />
             </div>
 
@@ -168,7 +183,7 @@ export function LoginForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading || !password.trim()}
+              disabled={isLoading || !password.trim() || (authMode === 'multi_user' && !username.trim())}
             >
               {isLoading ? t('auth.signingIn') : t('auth.signIn')}
             </Button>

@@ -5,15 +5,17 @@ import { getApiUrl } from '@/lib/config'
 interface AuthState {
   isAuthenticated: boolean
   token: string | null
+  username: string | null
   isLoading: boolean
   error: string | null
   lastAuthCheck: number | null
   isCheckingAuth: boolean
   hasHydrated: boolean
   authRequired: boolean | null
+  authMode: 'disabled' | 'password' | 'multi_user' | null
   setHasHydrated: (state: boolean) => void
   checkAuthRequired: () => Promise<boolean>
-  login: (password: string) => Promise<boolean>
+  login: (password: string, username?: string) => Promise<boolean>
   logout: () => void
   checkAuth: () => Promise<boolean>
 }
@@ -23,12 +25,14 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       isAuthenticated: false,
       token: null,
+      username: null,
       isLoading: false,
       error: null,
       lastAuthCheck: null,
       isCheckingAuth: false,
       hasHydrated: false,
       authRequired: null,
+      authMode: null,
 
       setHasHydrated: (state: boolean) => {
         set({ hasHydrated: state })
@@ -47,11 +51,12 @@ export const useAuthStore = create<AuthState>()(
 
           const data = await response.json()
           const required = data.auth_enabled || false
-          set({ authRequired: required })
+          const mode = data.auth_mode || (required ? 'password' : 'disabled')
+          set({ authRequired: required, authMode: mode })
 
           // If auth is not required, mark as authenticated
           if (!required) {
-            set({ isAuthenticated: true, token: 'not-required' })
+            set({ isAuthenticated: true, token: 'not-required', username: null })
           }
 
           return required
@@ -74,24 +79,28 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      login: async (password: string) => {
+      login: async (password: string, username?: string) => {
         set({ isLoading: true, error: null })
         try {
           const apiUrl = await getApiUrl()
 
-          // Test auth with notebooks endpoint
-          const response = await fetch(`${apiUrl}/api/notebooks`, {
-            method: 'GET',
+          const response = await fetch(`${apiUrl}/api/auth/login`, {
+            method: 'POST',
             headers: {
-              'Authorization': `Bearer ${password}`,
               'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+              username: username || null,
+              password,
+            })
           })
           
           if (response.ok) {
+            const data = await response.json()
             set({ 
               isAuthenticated: true, 
-              token: password, 
+              token: data.token,
+              username: data.user?.username || username || null,
               isLoading: false,
               lastAuthCheck: Date.now(),
               error: null
@@ -113,7 +122,8 @@ export const useAuthStore = create<AuthState>()(
               error: errorMessage,
               isLoading: false,
               isAuthenticated: false,
-              token: null
+              token: null,
+              username: null
             })
             return false
           }
@@ -133,7 +143,8 @@ export const useAuthStore = create<AuthState>()(
             error: errorMessage,
             isLoading: false,
             isAuthenticated: false,
-            token: null
+            token: null,
+            username: null
           })
           return false
         }
@@ -143,6 +154,7 @@ export const useAuthStore = create<AuthState>()(
         set({ 
           isAuthenticated: false, 
           token: null, 
+          username: null,
           error: null 
         })
       },
@@ -191,6 +203,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               isAuthenticated: false,
               token: null,
+              username: null,
               lastAuthCheck: null,
               isCheckingAuth: false
             })
@@ -201,6 +214,7 @@ export const useAuthStore = create<AuthState>()(
           set({ 
             isAuthenticated: false, 
             token: null,
+            username: null,
             lastAuthCheck: null,
             isCheckingAuth: false 
           })
@@ -212,6 +226,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       partialize: (state) => ({
         token: state.token,
+        username: state.username,
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {

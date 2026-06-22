@@ -130,6 +130,26 @@ OpenNotebookLM.bat --stop-hermes
 
 启动器会在需要时创建或修复 `opennotebook/.env`。不要提交加密密钥、密码、笔记数据库、上传资料或生成的音频/文本产物。
 
+## 云端多用户部署
+
+如果部署到公网 PaaS，并且需要多人分别管理自己的笔记本，不要继续依赖旧的单一共享密码。请在平台环境变量中配置命名用户：
+
+```env
+OPEN_NOTEBOOK_ENCRYPTION_KEY=<稳定的加密密钥>
+OPEN_NOTEBOOK_AUTH_SECRET=<稳定的随机 token 签名密钥>
+OPEN_NOTEBOOK_USERS={"alice":"alice-password","bob":"bob-password"}
+```
+
+`OPEN_NOTEBOOK_USERS` 也支持逗号分隔格式：
+
+```env
+OPEN_NOTEBOOK_USERS=alice:alice-password,bob:bob-password
+```
+
+设置 `OPEN_NOTEBOOK_USERS` 后，登录页会要求输入用户名和密码。每个用户创建的笔记本、来源、笔记和聊天会话都会写入该用户的 owner ID，主要 notebook/source/note API 只返回当前登录用户自己的数据。
+
+已有数据会通过数据库迁移 17 归属到 `default` 用户。如果启用多用户后仍要管理这些旧数据，请在 `OPEN_NOTEBOOK_USERS` 中加入 `default` 账号，例如 `{"default":"new-default-password","alice":"alice-password"}`。否则请先导出旧笔记本，再从旧的共享密码模式切换到多用户模式。
+
 ## 本地 embedding 模型
 
 默认检查的 Ollama 本地 embedding 模型是：

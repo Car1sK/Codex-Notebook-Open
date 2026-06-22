@@ -1,9 +1,11 @@
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
+from api.auth import ensure_user_owns, get_request_user
 from api.models import NoteCreate, NoteResponse, NoteUpdate
+from open_notebook.auth_context import AuthenticatedUser
 from open_notebook.domain.notebook import Note
 from open_notebook.exceptions import InvalidInputError, NotFoundError
 
@@ -13,6 +15,7 @@ router = APIRouter()
 @router.get("/notes", response_model=List[NoteResponse])
 async def get_notes(
     notebook_id: Optional[str] = Query(None, description="Filter by notebook ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Get all notes with optional notebook filtering."""
     try:
@@ -21,6 +24,7 @@ async def get_notes(
             from open_notebook.domain.notebook import Notebook
 
             notebook = await Notebook.get(notebook_id)
+            ensure_user_owns(notebook, current_user)
             notes = await notebook.get_notes()
         else:
             # Get all notes
@@ -47,7 +51,10 @@ async def get_notes(
 
 
 @router.post("/notes", response_model=NoteResponse)
-async def create_note(note_data: NoteCreate):
+async def create_note(
+    note_data: NoteCreate,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Create a new note."""
     try:
         # Auto-generate title if not provided and it's an AI note
@@ -77,6 +84,7 @@ async def create_note(note_data: NoteCreate):
             title=title,
             content=note_data.content,
             note_type=note_type,
+            owner_id=current_user.owner_id,
         )
         command_id = await new_note.save()
 
@@ -85,7 +93,8 @@ async def create_note(note_data: NoteCreate):
             from open_notebook.domain.notebook import Notebook
 
             # Verify the notebook exists (raises NotFoundError -> 404)
-            await Notebook.get(note_data.notebook_id)
+            notebook = await Notebook.get(note_data.notebook_id)
+            ensure_user_owns(notebook, current_user)
             await new_note.add_to_notebook(note_data.notebook_id)
 
         return NoteResponse(
@@ -109,10 +118,14 @@ async def create_note(note_data: NoteCreate):
 
 
 @router.get("/notes/{note_id}", response_model=NoteResponse)
-async def get_note(note_id: str):
+async def get_note(
+    note_id: str,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Get a specific note by ID."""
     try:
         note = await Note.get(note_id)
+        ensure_user_owns(note, current_user)
 
         return NoteResponse(
             id=note.id or "",
@@ -132,10 +145,15 @@ async def get_note(note_id: str):
 
 
 @router.put("/notes/{note_id}", response_model=NoteResponse)
-async def update_note(note_id: str, note_update: NoteUpdate):
+async def update_note(
+    note_id: str,
+    note_update: NoteUpdate,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Update a note."""
     try:
         note = await Note.get(note_id)
+        ensure_user_owns(note, current_user)
 
         # Update only provided fields
         if note_update.title is not None:
@@ -173,10 +191,14 @@ async def update_note(note_id: str, note_update: NoteUpdate):
 
 
 @router.delete("/notes/{note_id}")
-async def delete_note(note_id: str):
+async def delete_note(
+    note_id: str,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Delete a note."""
     try:
         note = await Note.get(note_id)
+        ensure_user_owns(note, current_user)
 
         await note.delete()
 

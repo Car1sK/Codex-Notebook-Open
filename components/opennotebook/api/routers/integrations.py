@@ -1,7 +1,10 @@
 """External integration endpoints."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.auth import ensure_user_owns, get_request_user
+from open_notebook.auth_context import AuthenticatedUser
+from open_notebook.domain.notebook import Notebook
 from open_notebook.integrations.notebooklm import (
     BundleImportPreview,
     BundleImportResult,
@@ -32,18 +35,28 @@ async def preview_notebooklm_bundle(
 async def import_notebooklm_bundle(
     bundle: NotebookBundlePayload,
     embed_sources: bool = Query(default=False),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ) -> BundleImportResult:
     _require_notebooklm_origin(bundle)
-    return await NotebookBundleImporter(OpenNotebookBundleStore()).import_bundle(
+    result = await NotebookBundleImporter(OpenNotebookBundleStore()).import_bundle(
         bundle, embed_sources=embed_sources
     )
+    notebook = await Notebook.get(result.local_notebook_id)
+    notebook.owner_id = current_user.owner_id
+    await notebook.save()
+    return result
 
 
 @router.get(
     "/integrations/notebooklm/notebooks/{notebook_id}/bundle",
     response_model=NotebookBundlePayload,
 )
-async def export_notebooklm_bundle(notebook_id: str) -> NotebookBundlePayload:
+async def export_notebooklm_bundle(
+    notebook_id: str,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+) -> NotebookBundlePayload:
+    notebook = await Notebook.get(notebook_id)
+    ensure_user_owns(notebook, current_user)
     return await export_open_notebook_bundle(notebook_id)
 
 

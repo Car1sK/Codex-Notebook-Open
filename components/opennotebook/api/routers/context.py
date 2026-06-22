@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
+from api.auth import ensure_user_owns, get_request_user
 from api.models import ContextRequest, ContextResponse
+from open_notebook.auth_context import AuthenticatedUser
 from open_notebook.domain.notebook import Note, Notebook, Source
 from open_notebook.exceptions import InvalidInputError
 from open_notebook.utils import token_count
@@ -10,11 +12,16 @@ router = APIRouter()
 
 
 @router.post("/notebooks/{notebook_id}/context", response_model=ContextResponse)
-async def get_notebook_context(notebook_id: str, context_request: ContextRequest):
+async def get_notebook_context(
+    notebook_id: str,
+    context_request: ContextRequest,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Get context for a notebook based on configuration."""
     try:
         # Verify notebook exists
         notebook = await Notebook.get(notebook_id)
+        ensure_user_owns(notebook, current_user)
         if not notebook:
             raise HTTPException(status_code=404, detail="Notebook not found")
 
@@ -38,6 +45,7 @@ async def get_notebook_context(notebook_id: str, context_request: ContextRequest
 
                     try:
                         source = await Source.get(full_source_id)
+                        ensure_user_owns(source, current_user)
                     except Exception:
                         continue
 
@@ -64,6 +72,7 @@ async def get_notebook_context(notebook_id: str, context_request: ContextRequest
                         note_id if note_id.startswith("note:") else f"note:{note_id}"
                     )
                     note = await Note.get(full_note_id)
+                    ensure_user_owns(note, current_user)
                     if not note:
                         continue
 

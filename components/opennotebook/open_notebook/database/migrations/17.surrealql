@@ -1,0 +1,16 @@
+-- Migration 17: add per-user ownership for cloud multi-user deployments
+
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE notebook TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE source TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE note TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE chat_session TYPE option<string>;
+
+DEFINE INDEX IF NOT EXISTS idx_notebook_owner ON TABLE notebook COLUMNS owner_id;
+DEFINE INDEX IF NOT EXISTS idx_source_owner ON TABLE source COLUMNS owner_id;
+DEFINE INDEX IF NOT EXISTS idx_note_owner ON TABLE note COLUMNS owner_id;
+DEFINE INDEX IF NOT EXISTS idx_chat_session_owner ON TABLE chat_session COLUMNS owner_id;
+
+UPDATE notebook SET owner_id = "default" WHERE owner_id = NONE;
+UPDATE source SET owner_id = "default" WHERE owner_id = NONE;
+UPDATE note SET owner_id = "default" WHERE owner_id = NONE;
+UPDATE chat_session SET owner_id = "default" WHERE owner_id = NONE;

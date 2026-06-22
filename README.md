@@ -130,6 +130,26 @@ Runtime data is intentionally local-only:
 
 The launcher creates or repairs `opennotebook/.env` when needed. Do not commit encryption keys, passwords, notebook data, uploaded source material, or generated audio/text artifacts.
 
+## Cloud multi-user deployment
+
+For a public PaaS deployment, do not rely on the legacy single shared password if multiple people should manage separate notebooks. Configure named users with environment variables:
+
+```env
+OPEN_NOTEBOOK_ENCRYPTION_KEY=<stable encryption secret>
+OPEN_NOTEBOOK_AUTH_SECRET=<stable random token signing secret>
+OPEN_NOTEBOOK_USERS={"alice":"alice-password","bob":"bob-password"}
+```
+
+`OPEN_NOTEBOOK_USERS` also accepts comma-separated pairs:
+
+```env
+OPEN_NOTEBOOK_USERS=alice:alice-password,bob:bob-password
+```
+
+When `OPEN_NOTEBOOK_USERS` is set, the login page asks for both username and password. Each user's notebooks, sources, notes, and chat sessions are tagged with that user's owner ID, and the main notebook/source/note API routes only return records owned by the logged-in user.
+
+Existing data is assigned to the `default` owner by database migration 17. If you need to keep managing that old data after enabling multi-user mode, include a `default` account in `OPEN_NOTEBOOK_USERS`, for example `{"default":"new-default-password","alice":"alice-password"}`. Otherwise export the old notebooks before switching from the legacy shared password.
+
 ## Local embedding model
 
 The default local embedding model checked by the launcher is:

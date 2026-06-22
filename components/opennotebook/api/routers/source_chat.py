@@ -2,13 +2,15 @@ import asyncio
 import json
 from typing import AsyncGenerator, List, Optional
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from api.auth import ensure_user_owns, get_request_user
+from open_notebook.auth_context import AuthenticatedUser
 from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.notebook import ChatSession, Source
 from open_notebook.exceptions import (
@@ -28,11 +30,13 @@ class CreateSourceChatSessionRequest(BaseModel):
         None, description="Optional model override for this session"
     )
 
+
 class UpdateSourceChatSessionRequest(BaseModel):
     title: Optional[str] = Field(None, description="New session title")
     model_override: Optional[str] = Field(
         None, description="Model override for this session"
     )
+
 
 class ChatMessage(BaseModel):
     id: str = Field(..., description="Message ID")
@@ -52,6 +56,7 @@ class ContextIndicator(BaseModel):
         default_factory=list, description="Note IDs used in context"
     )
 
+
 class SourceChatSessionResponse(BaseModel):
     id: str = Field(..., description="Session ID")
     title: str = Field(..., description="Session title")
@@ -65,6 +70,7 @@ class SourceChatSessionResponse(BaseModel):
         None, description="Number of messages in session"
     )
 
+
 class SourceChatSessionWithMessagesResponse(SourceChatSessionResponse):
     messages: List[ChatMessage] = Field(
         default_factory=list, description="Session messages"
@@ -73,11 +79,13 @@ class SourceChatSessionWithMessagesResponse(SourceChatSessionResponse):
         None, description="Context indicators from last response"
     )
 
+
 class SendMessageRequest(BaseModel):
     message: str = Field(..., description="User message content")
     model_override: Optional[str] = Field(
         None, description="Optional model override for this message"
     )
+
 
 class SuccessResponse(BaseModel):
     success: bool = Field(True, description="Operation success status")
@@ -90,6 +98,7 @@ class SuccessResponse(BaseModel):
 async def create_source_chat_session(
     request: CreateSourceChatSessionRequest,
     source_id: str = Path(..., description="Source ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Create a new chat session for a source."""
     try:
@@ -98,6 +107,7 @@ async def create_source_chat_session(
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -105,6 +115,7 @@ async def create_source_chat_session(
         session = ChatSession(
             title=request.title or f"Source Chat {asyncio.get_event_loop().time():.0f}",
             model_override=request.model_override,
+            owner_id=current_user.owner_id,
         )
         await session.save()
 
@@ -132,7 +143,10 @@ async def create_source_chat_session(
 @router.get(
     "/sources/{source_id}/chat/sessions", response_model=List[SourceChatSessionResponse]
 )
-async def get_source_chat_sessions(source_id: str = Path(..., description="Source ID")):
+async def get_source_chat_sessions(
+    source_id: str = Path(..., description="Source ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Get all chat sessions for a source."""
     try:
         # Verify source exists
@@ -140,6 +154,7 @@ async def get_source_chat_sessions(source_id: str = Path(..., description="Sourc
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -160,6 +175,7 @@ async def get_source_chat_sessions(source_id: str = Path(..., description="Sourc
                 )
                 if session_result and len(session_result) > 0:
                     session_data = session_result[0]
+                    ensure_user_owns(ChatSession(**session_data), current_user)
 
                     # Get message count from LangGraph state
                     msg_count = await get_session_message_count(
@@ -197,6 +213,7 @@ async def get_source_chat_sessions(source_id: str = Path(..., description="Sourc
 async def get_source_chat_session(
     source_id: str = Path(..., description="Source ID"),
     session_id: str = Path(..., description="Session ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Get a specific source chat session with its messages."""
     try:
@@ -205,6 +222,7 @@ async def get_source_chat_session(
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -215,6 +233,7 @@ async def get_source_chat_session(
             else f"chat_session:{session_id}"
         )
         session = await ChatSession.get(full_session_id)
+        ensure_user_owns(session, current_user)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -295,6 +314,7 @@ async def update_source_chat_session(
     request: UpdateSourceChatSessionRequest,
     source_id: str = Path(..., description="Source ID"),
     session_id: str = Path(..., description="Session ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Update source chat session title and/or model override."""
     try:
@@ -303,6 +323,7 @@ async def update_source_chat_session(
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -313,6 +334,7 @@ async def update_source_chat_session(
             else f"chat_session:{session_id}"
         )
         session = await ChatSession.get(full_session_id)
+        ensure_user_owns(session, current_user)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -365,6 +387,7 @@ async def update_source_chat_session(
 async def delete_source_chat_session(
     source_id: str = Path(..., description="Source ID"),
     session_id: str = Path(..., description="Session ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Delete a source chat session."""
     try:
@@ -373,6 +396,7 @@ async def delete_source_chat_session(
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -383,6 +407,7 @@ async def delete_source_chat_session(
             else f"chat_session:{session_id}"
         )
         session = await ChatSession.get(full_session_id)
+        ensure_user_owns(session, current_user)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -485,6 +510,7 @@ async def send_message_to_source_chat(
     request: SendMessageRequest,
     source_id: str = Path(..., description="Source ID"),
     session_id: str = Path(..., description="Session ID"),
+    current_user: AuthenticatedUser = Depends(get_request_user),
 ):
     """Send a message to source chat session with SSE streaming response."""
     try:
@@ -493,6 +519,7 @@ async def send_message_to_source_chat(
             source_id if source_id.startswith("source:") else f"source:{source_id}"
         )
         source = await Source.get(full_source_id)
+        ensure_user_owns(source, current_user)
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
@@ -503,6 +530,7 @@ async def send_message_to_source_chat(
             else f"chat_session:{session_id}"
         )
         session = await ChatSession.get(full_session_id)
+        ensure_user_owns(session, current_user)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 

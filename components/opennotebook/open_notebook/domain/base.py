@@ -10,6 +10,7 @@ from pydantic import (
     model_validator,
 )
 
+from open_notebook.auth_context import get_current_owner_id, is_owner_allowed
 from open_notebook.database.repository import (
     ensure_record_id,
     repo_create,
@@ -81,11 +82,27 @@ class ObjectModel(BaseModel):
                         )
 
                 validated_order_by = ", ".join(validated_clauses)
-                query = f"SELECT * FROM {table_name} ORDER BY {validated_order_by}"
+                owner_id = get_current_owner_id()
+                owner_filter = (
+                    " WHERE owner_id = $owner_id"
+                    if owner_id and "owner_id" in target_class.model_fields
+                    else ""
+                )
+                query = (
+                    f"SELECT * FROM {table_name}{owner_filter} "
+                    f"ORDER BY {validated_order_by}"
+                )
             else:
-                query = f"SELECT * FROM {table_name}"
+                owner_id = get_current_owner_id()
+                owner_filter = (
+                    " WHERE owner_id = $owner_id"
+                    if owner_id and "owner_id" in target_class.model_fields
+                    else ""
+                )
+                query = f"SELECT * FROM {table_name}{owner_filter}"
 
-            result = await repo_query(query)
+            vars = {"owner_id": owner_id} if "owner_id" in query else None
+            result = await repo_query(query, vars)
             objects = []
             for obj in result:
                 try:
@@ -119,6 +136,13 @@ class ObjectModel(BaseModel):
 
             result = await repo_query("SELECT * FROM $id", {"id": ensure_record_id(id)})
             if result:
+                owner_id = get_current_owner_id()
+                record_owner_id = result[0].get("owner_id")
+                if (
+                    "owner_id" in target_class.model_fields
+                    and not is_owner_allowed(record_owner_id, owner_id)
+                ):
+                    raise NotFoundError(f"{table_name} with id {id} not found")
                 return target_class(**result[0])
             else:
                 raise NotFoundError(f"{table_name} with id {id} not found")
@@ -153,6 +177,13 @@ class ObjectModel(BaseModel):
         """
         try:
             self.model_validate(self.model_dump(), strict=True)
+            owner_id = get_current_owner_id()
+            if (
+                "owner_id" in self.__class__.model_fields
+                and not getattr(self, "owner_id", None)
+                and owner_id
+            ):
+                setattr(self, "owner_id", owner_id)
             data = self._prepare_save_data()
             data["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
