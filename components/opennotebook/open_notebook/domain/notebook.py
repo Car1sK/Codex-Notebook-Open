@@ -8,9 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from surreal_commands import submit_command
 from surrealdb import RecordID
 
+from open_notebook.auth_context import get_current_owner_id, is_owner_allowed
 from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.base import ObjectModel
 from open_notebook.exceptions import DatabaseOperationError, InvalidInputError
+
+
+def _record_visible_to_current_owner(record: Optional[Dict[str, Any]]) -> bool:
+    if not record:
+        return False
+    return is_owner_allowed(record.get("owner_id"), get_current_owner_id())
 
 
 class Notebook(ObjectModel):
@@ -39,7 +46,12 @@ class Notebook(ObjectModel):
             """,
                 {"id": ensure_record_id(self.id)},
             )
-            return [Source(**src["source"]) for src in srcs] if srcs else []
+            sources: List[Source] = []
+            for row in srcs or []:
+                source_data = row.get("source")
+                if _record_visible_to_current_owner(source_data):
+                    sources.append(Source(**source_data))
+            return sources
         except Exception as e:
             logger.error(f"Error fetching sources for notebook {self.id}: {str(e)}")
             logger.exception(e)
@@ -61,7 +73,12 @@ class Notebook(ObjectModel):
             """,
                 {"id": ensure_record_id(self.id)},
             )
-            return [Note(**src["note"]) for src in srcs] if srcs else []
+            notes: List[Note] = []
+            for row in srcs or []:
+                note_data = row.get("note")
+                if _record_visible_to_current_owner(note_data):
+                    notes.append(Note(**note_data))
+            return notes
         except Exception as e:
             logger.error(f"Error fetching notes for notebook {self.id}: {str(e)}")
             logger.exception(e)
@@ -142,9 +159,15 @@ class Notebook(ObjectModel):
             """,
                 {"id": ensure_record_id(self.id)},
             )
-            return (
-                [ChatSession(**src["chat_session"][0]) for src in srcs] if srcs else []
-            )
+            sessions: List[ChatSession] = []
+            for row in srcs or []:
+                session_list = row.get("chat_session") or []
+                if not session_list:
+                    continue
+                session_data = session_list[0]
+                if _record_visible_to_current_owner(session_data):
+                    sessions.append(ChatSession(**session_data))
+            return sessions
         except Exception as e:
             logger.error(
                 f"Error fetching chat sessions for notebook {self.id}: {str(e)}"
@@ -314,7 +337,8 @@ class SourceEmbedding(ObjectModel):
             """,
                 {"id": ensure_record_id(self.id)},
             )
-            return Source(**src[0]["source"])
+            source_data = src[0]["source"]
+            return await Source.get(str(source_data["id"]))
         except Exception as e:
             logger.error(f"Error fetching source for embedding {self.id}: {str(e)}")
             logger.exception(e)
@@ -334,7 +358,8 @@ class SourceInsight(ObjectModel):
             """,
                 {"id": ensure_record_id(self.id)},
             )
-            return Source(**src[0]["source"])
+            source_data = src[0]["source"]
+            return await Source.get(str(source_data["id"]))
         except Exception as e:
             logger.error(f"Error fetching source for insight {self.id}: {str(e)}")
             logger.exception(e)
