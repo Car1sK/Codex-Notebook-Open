@@ -152,6 +152,8 @@ OPEN_NOTEBOOK_USERS=alice:alice-password,bob:bob-password
 
 在 PaaS 升级时，必须保留数据库持久化卷，并保持 `OPEN_NOTEBOOK_ENCRYPTION_KEY` 不变。更换加密密钥可能导致已保存的加密凭据无法读取；删除持久化数据库卷会删除已有笔记本。
 
+完整迁移步骤见：[PaaS 上的 Open Notebook 多用户迁移教程：保留已有 notebook](docs/paas-multi-user-migration.zh-CN.md)。
+
 ## 本地 embedding 模型
 
 默认检查的 Ollama 本地 embedding 模型是：
