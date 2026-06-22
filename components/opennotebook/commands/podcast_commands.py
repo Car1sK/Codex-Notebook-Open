@@ -54,6 +54,7 @@ class PodcastGenerationInput(CommandInput):
     episode_name: str
     content: str
     briefing_suffix: Optional[str] = None
+    owner_id: Optional[str] = None
 
 
 class PodcastGenerationOutput(CommandOutput):
@@ -215,6 +216,7 @@ async def generate_podcast_command(
         # Create the record for the episode and associate with the ongoing command
         episode = PodcastEpisode(
             name=input_data.episode_name,
+            owner_id=input_data.owner_id,
             episode_profile=full_model_dump(episode_profile.model_dump()),
             speaker_profile=full_model_dump(speaker_profile.model_dump()),
             command=ensure_record_id(input_data.execution_context.command_id)

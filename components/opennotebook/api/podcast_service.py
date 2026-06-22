@@ -38,6 +38,7 @@ class PodcastService:
         episode_profile_name: str,
         speaker_profile_name: str,
         episode_name: str,
+        owner_id: Optional[str],
         notebook_id: Optional[str] = None,
         content: Optional[str] = None,
         briefing_suffix: Optional[str] = None,
@@ -82,6 +83,7 @@ class PodcastService:
                 "episode_name": episode_name,
                 "content": str(content),
                 "briefing_suffix": briefing_suffix,
+                "owner_id": owner_id,
             }
 
             # Ensure command modules are imported before submitting
@@ -119,7 +121,9 @@ class PodcastService:
             return {
                 "job_id": job_id,
                 "status": status.status if status else "unknown",
-                "result": status.result if status else None,
+                # Podcast command results can include generated transcript/outline
+                # derived from user content. Keep generic job status polling safe.
+                "result": None,
                 "error_message": getattr(status, "error_message", None)
                 if status
                 else None,
@@ -129,7 +133,7 @@ class PodcastService:
                 "updated": str(status.updated)
                 if status and hasattr(status, "updated") and status.updated
                 else None,
-                "progress": getattr(status, "progress", None) if status else None,
+                "progress": None,
             }
         except Exception as e:
             logger.error(f"Failed to get podcast job status: {e}")

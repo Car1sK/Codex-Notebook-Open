@@ -1,0 +1,4 @@
+-- Remove owner isolation from podcast episodes.
+
+REMOVE INDEX IF EXISTS idx_episode_owner ON TABLE episode;
+REMOVE FIELD IF EXISTS owner_id ON TABLE episode;

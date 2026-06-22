@@ -205,6 +205,9 @@ class PodcastEpisode(ObjectModel):
     table_name: ClassVar[str] = "episode"
 
     name: str = Field(..., description="Episode name")
+    owner_id: Optional[str] = Field(
+        default=None, description="Owner ID for multi-user isolation"
+    )
     episode_profile: Dict[str, Any] = Field(
         ..., description="Episode profile used (stored as object)"
     )

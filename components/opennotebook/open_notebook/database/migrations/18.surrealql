@@ -1,0 +1,6 @@
+-- Add owner isolation to podcast episodes for multi-user deployments.
+
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE episode TYPE option<string>;
+DEFINE INDEX IF NOT EXISTS idx_episode_owner ON TABLE episode COLUMNS owner_id;
+
+UPDATE episode SET owner_id = "default" WHERE owner_id = NONE;
