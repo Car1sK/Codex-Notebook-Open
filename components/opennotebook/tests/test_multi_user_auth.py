@@ -78,6 +78,35 @@ def test_multi_user_login_uses_signed_tokens_and_rejects_legacy_password(
     assert authenticate_bearer("legacy-password") is None
 
 
+def test_multi_user_token_is_rejected_after_user_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPEN_NOTEBOOK_USERS", "alice:alpha,bob:beta")
+    monkeypatch.setenv("OPEN_NOTEBOOK_AUTH_SECRET", "stable-token-secret")
+
+    alice = authenticate_login("alice", "alpha")
+    assert alice is not None
+    token = create_access_token(alice)
+    assert authenticate_bearer(token) == alice
+
+    monkeypatch.setenv("OPEN_NOTEBOOK_USERS", "bob:beta")
+
+    assert authenticate_bearer(token) is None
+
+
+def test_multi_user_token_owner_must_match_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPEN_NOTEBOOK_USERS", "alice:alpha")
+    monkeypatch.setenv("OPEN_NOTEBOOK_AUTH_SECRET", "stable-token-secret")
+
+    mismatched_token = create_access_token(
+        AuthenticatedUser(username="alice", owner_id="owner_b")
+    )
+
+    assert authenticate_bearer(mismatched_token) is None
+
+
 def test_legacy_password_mode_keeps_default_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

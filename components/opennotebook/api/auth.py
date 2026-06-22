@@ -147,6 +147,12 @@ def _verify_access_token(token: str) -> Optional[AuthenticatedUser]:
         owner_id = str(payload.get("sub") or "")
         if not username or not owner_id:
             return None
+        users = configured_users()
+        if users:
+            if username not in users:
+                return None
+            if owner_id != _owner_id_for_username(username):
+                return None
         return AuthenticatedUser(username=username, owner_id=owner_id)
     except Exception:
         return None
