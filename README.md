@@ -146,9 +146,11 @@ OPEN_NOTEBOOK_USERS={"alice":"alice-password","bob":"bob-password"}
 OPEN_NOTEBOOK_USERS=alice:alice-password,bob:bob-password
 ```
 
-When `OPEN_NOTEBOOK_USERS` is set, the login page asks for both username and password. Each user's notebooks, sources, notes, and chat sessions are tagged with that user's owner ID, and the main notebook/source/note API routes only return records owned by the logged-in user.
+When `OPEN_NOTEBOOK_USERS` is set, the login page asks for both username and password. Each user receives a deterministic owner ID. User-owned notebooks, sources, notes, chat sessions, podcast episodes, embedding rebuilds, NotebookLM bundle mappings, relationship reads, search results, context building, downloads, audio streaming, and import/export paths are scoped to the logged-in owner. Global model credentials, model registry changes, settings, transformation templates, and podcast profile management remain restricted to the `default` administrator account.
 
-Existing data is assigned to the `default` owner by database migration 17. If you need to keep managing that old data after enabling multi-user mode, include a `default` account in `OPEN_NOTEBOOK_USERS`, for example `{"default":"new-default-password","alice":"alice-password"}`. Otherwise export the old notebooks before switching from the legacy shared password.
+Existing notebooks, sources, notes, chat sessions, podcast episodes, and NotebookLM sync mappings are assigned to the `default` owner by database migrations. To keep managing old data after enabling multi-user mode, include a `default` account in `OPEN_NOTEBOOK_USERS`, for example `{"default":"new-default-password","alice":"alice-password"}`. Otherwise export the old notebooks before switching from the legacy shared password.
+
+For PaaS upgrades, keep the database volume and `OPEN_NOTEBOOK_ENCRYPTION_KEY` stable. Changing the encryption key can make already-saved encrypted credentials unreadable, and removing the persisted database volume removes the notebooks.
 
 ## Local embedding model
 

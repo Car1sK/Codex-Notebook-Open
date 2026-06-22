@@ -175,6 +175,36 @@ class Notebook(ObjectModel):
             logger.exception(e)
             raise DatabaseOperationError(e)
 
+    async def _count_other_visible_notebook_refs(self, source_id: str) -> int:
+        if not self.id:
+            return 0
+
+        try:
+            refs = await repo_query(
+                """
+                SELECT VALUE out
+                FROM reference
+                WHERE in = $source_id AND out != $notebook_id
+                """,
+                {
+                    "source_id": ensure_record_id(source_id),
+                    "notebook_id": ensure_record_id(self.id),
+                },
+            )
+            visible_count = 0
+            for notebook_id in refs or []:
+                try:
+                    await Notebook.get(str(notebook_id))
+                    visible_count += 1
+                except Exception:
+                    continue
+            return visible_count
+        except Exception as e:
+            logger.warning(
+                f"Error counting visible notebook refs for source {source_id}: {e}"
+            )
+            return 0
+
     async def get_delete_preview(self) -> Dict[str, Any]:
         """
         Get counts of items that would be affected by deleting this notebook.
@@ -185,32 +215,20 @@ class Notebook(ObjectModel):
         - shared_source_count: Sources in other notebooks (will be unlinked only)
         """
         try:
-            notebook_id = ensure_record_id(self.id)
+            notes = await self.get_notes()
+            note_count = len(notes)
 
-            # Count notes
-            note_result = await repo_query(
-                "SELECT count() as count FROM artifact WHERE out = $notebook_id GROUP ALL",
-                {"notebook_id": notebook_id},
-            )
-            note_count = note_result[0]["count"] if note_result else 0
-
-            # Get sources with count of references to OTHER notebooks
-            # If assigned_others = 0, source is exclusive to this notebook
-            # If assigned_others > 0, source is shared with other notebooks
-            source_counts = await repo_query(
-                """
-                SELECT
-                    id,
-                    count(->reference[WHERE out != $notebook_id].out) as assigned_others
-                FROM (SELECT VALUE <-reference.in AS sources FROM $notebook_id)[0]
-                """,
-                {"notebook_id": notebook_id},
-            )
+            sources = await self.get_sources()
 
             exclusive_count = 0
             shared_count = 0
-            for src in source_counts:
-                if src.get("assigned_others", 0) == 0:
+            for source in sources:
+                if not source.id:
+                    continue
+                assigned_others = await self._count_other_visible_notebook_refs(
+                    str(source.id)
+                )
+                if assigned_others == 0:
                     exclusive_count += 1
                 else:
                     shared_count += 1
@@ -259,25 +277,18 @@ class Notebook(ObjectModel):
             )
 
             # 2. Handle sources
+            sources = await self.get_sources()
             if delete_exclusive_sources:
-                # Find sources with count of references to OTHER notebooks
-                # If assigned_others = 0, source is exclusive to this notebook
-                source_counts = await repo_query(
-                    """
-                    SELECT
-                        id,
-                        count(->reference[WHERE out != $notebook_id].out) as assigned_others
-                    FROM (SELECT VALUE <-reference.in AS sources FROM $notebook_id)[0]
-                    """,
-                    {"notebook_id": notebook_id},
-                )
-
-                for src in source_counts:
-                    source_id = src.get("id")
-                    if source_id and src.get("assigned_others", 0) == 0:
+                for source in sources:
+                    source_id = source.id
+                    if not source_id:
+                        continue
+                    assigned_others = await self._count_other_visible_notebook_refs(
+                        str(source_id)
+                    )
+                    if assigned_others == 0:
                         # Exclusive source - delete it
                         try:
-                            source = await Source.get(str(source_id))
                             await source.delete()
                             deleted_sources += 1
                         except Exception as e:
@@ -287,12 +298,8 @@ class Notebook(ObjectModel):
                     else:
                         unlinked_sources += 1
             else:
-                # Just count sources that will be unlinked
-                source_result = await repo_query(
-                    "SELECT count() as count FROM reference WHERE out = $notebook_id GROUP ALL",
-                    {"notebook_id": notebook_id},
-                )
-                unlinked_sources = source_result[0]["count"] if source_result else 0
+                # Just count visible sources that will be unlinked
+                unlinked_sources = len(sources)
 
             # Delete reference relationships (unlink all sources)
             await repo_query(

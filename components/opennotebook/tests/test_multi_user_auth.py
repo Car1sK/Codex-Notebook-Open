@@ -310,3 +310,92 @@ def test_notebook_relationship_reads_filter_cross_owner_records(
     assert [source.id for source in sources] == ["source:visible"]
     assert [note.id for note in notes] == ["note:visible"]
     assert [session.id for session in sessions] == ["chat_session:visible"]
+
+
+def test_notebook_delete_preview_counts_only_visible_relationships(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_domain_repo_query(
+        query: str, vars: dict[str, Any] | None = None
+    ) -> list[Any]:
+        if "fetch note" in query:
+            return [
+                {
+                    "note": {
+                        "id": "note:visible",
+                        "owner_id": "owner_a",
+                        "title": "Visible note",
+                    }
+                },
+                {
+                    "note": {
+                        "id": "note:hidden",
+                        "owner_id": "owner_b",
+                        "title": "Hidden note",
+                    }
+                },
+            ]
+        if "fetch source" in query:
+            return [
+                {
+                    "source": {
+                        "id": "source:exclusive",
+                        "owner_id": "owner_a",
+                        "title": "Exclusive source",
+                    }
+                },
+                {
+                    "source": {
+                        "id": "source:shared",
+                        "owner_id": "owner_a",
+                        "title": "Shared source",
+                    }
+                },
+                {
+                    "source": {
+                        "id": "source:hidden",
+                        "owner_id": "owner_b",
+                        "title": "Hidden source",
+                    }
+                },
+            ]
+        if "SELECT VALUE out" in query and "FROM reference" in query:
+            source_id = str((vars or {}).get("source_id"))
+            if "source:shared" in source_id:
+                return ["notebook:visible-other", "notebook:hidden-other"]
+            return []
+        raise AssertionError(f"Unexpected domain query: {query}")
+
+    original_get = Notebook.get
+
+    async def fake_notebook_get(notebook_id: str) -> Notebook:
+        if "notebook:visible-other" in notebook_id:
+            return Notebook(
+                id="notebook:visible-other",
+                owner_id="owner_a",
+                name="Visible other",
+                description="",
+            )
+        if "notebook:hidden-other" in notebook_id:
+            raise NotFoundError("notebook with id notebook:hidden-other not found")
+        return await original_get(notebook_id)
+
+    monkeypatch.setattr(notebook_domain, "repo_query", fake_domain_repo_query)
+    monkeypatch.setattr(Notebook, "get", staticmethod(fake_notebook_get))
+    user_token = set_current_user(AuthenticatedUser(username="alice", owner_id="owner_a"))
+    notebook = Notebook(
+        id="notebook:one",
+        name="Owned notebook",
+        description="",
+        owner_id="owner_a",
+    )
+    try:
+        preview = asyncio.run(notebook.get_delete_preview())
+    finally:
+        reset_current_user(user_token)
+
+    assert preview == {
+        "note_count": 1,
+        "exclusive_source_count": 1,
+        "shared_source_count": 1,
+    }

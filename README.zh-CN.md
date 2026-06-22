@@ -146,9 +146,11 @@ OPEN_NOTEBOOK_USERS={"alice":"alice-password","bob":"bob-password"}
 OPEN_NOTEBOOK_USERS=alice:alice-password,bob:bob-password
 ```
 
-设置 `OPEN_NOTEBOOK_USERS` 后，登录页会要求输入用户名和密码。每个用户创建的笔记本、来源、笔记和聊天会话都会写入该用户的 owner ID，主要 notebook/source/note API 只返回当前登录用户自己的数据。
+设置 `OPEN_NOTEBOOK_USERS` 后，登录页会要求输入用户名和密码。每个用户会获得稳定的 owner ID。用户自己的笔记本、来源、笔记、聊天会话、播客 episode、embedding 重建、NotebookLM bundle 映射、关系读取、搜索结果、上下文构建、下载、音频播放以及导入/导出路径都会按当前登录 owner 隔离。全局模型凭据、模型注册表修改、设置、转换模板和播客 profile 管理只允许 `default` 管理员账号操作。
 
-已有数据会通过数据库迁移 17 归属到 `default` 用户。如果启用多用户后仍要管理这些旧数据，请在 `OPEN_NOTEBOOK_USERS` 中加入 `default` 账号，例如 `{"default":"new-default-password","alice":"alice-password"}`。否则请先导出旧笔记本，再从旧的共享密码模式切换到多用户模式。
+已有笔记本、来源、笔记、聊天会话、播客 episode 和 NotebookLM 同步映射会通过数据库迁移归属到 `default` 用户。如果启用多用户后仍要管理这些旧数据，请在 `OPEN_NOTEBOOK_USERS` 中加入 `default` 账号，例如 `{"default":"new-default-password","alice":"alice-password"}`。否则请先导出旧笔记本，再从旧的共享密码模式切换到多用户模式。
+
+在 PaaS 升级时，必须保留数据库持久化卷，并保持 `OPEN_NOTEBOOK_ENCRYPTION_KEY` 不变。更换加密密钥可能导致已保存的加密凭据无法读取；删除持久化数据库卷会删除已有笔记本。
 
 ## 本地 embedding 模型
 
