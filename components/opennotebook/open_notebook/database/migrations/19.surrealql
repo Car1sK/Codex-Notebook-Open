@@ -1,0 +1,8 @@
+-- Migration 19: Scope external sync mappings to the owning Open Notebook user.
+
+DEFINE FIELD IF NOT EXISTS owner_id ON TABLE external_sync_mapping TYPE string DEFAULT "default";
+
+UPDATE external_sync_mapping SET owner_id = "default" WHERE owner_id = NONE;
+
+REMOVE INDEX IF EXISTS idx_external_sync_remote ON TABLE external_sync_mapping;
+DEFINE INDEX IF NOT EXISTS idx_external_sync_remote_owner ON TABLE external_sync_mapping COLUMNS provider, owner_id, remote_type, remote_id UNIQUE;

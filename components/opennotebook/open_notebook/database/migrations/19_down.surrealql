@@ -1,0 +1,5 @@
+-- Roll back migration 19.
+
+REMOVE INDEX IF EXISTS idx_external_sync_remote_owner ON TABLE external_sync_mapping;
+DEFINE INDEX IF NOT EXISTS idx_external_sync_remote ON TABLE external_sync_mapping COLUMNS provider, remote_type, remote_id UNIQUE;
+REMOVE FIELD IF EXISTS owner_id ON TABLE external_sync_mapping;

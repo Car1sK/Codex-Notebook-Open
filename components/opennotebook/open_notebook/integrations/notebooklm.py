@@ -11,6 +11,8 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field, model_validator
 
+from open_notebook.auth_context import DEFAULT_OWNER_ID, get_current_owner_id
+
 PROVIDER = "google-notebooklm"
 OPEN_NOTEBOOK_ORIGIN = "open-notebook"
 SCHEMA_VERSION = 1
@@ -114,6 +116,7 @@ class BundleImportResult(BundleImportPreview):
 @dataclass(frozen=True)
 class ExternalMapping:
     id: str
+    owner_id: str
     remote_type: str
     remote_id: str
     remote_parent_id: str | None
@@ -154,14 +157,16 @@ class OpenNotebookBundleStore:
     ) -> ExternalMapping | None:
         from open_notebook.database.repository import repo_query
 
+        owner_id = get_current_owner_id() or DEFAULT_OWNER_ID
         rows = await repo_query(
             "SELECT * FROM external_sync_mapping "
             "WHERE provider=$provider AND remote_type=$remote_type "
-            "AND remote_id=$remote_id LIMIT 1;",
+            "AND remote_id=$remote_id AND owner_id=$owner_id LIMIT 1;",
             {
                 "provider": PROVIDER,
                 "remote_type": remote_type,
                 "remote_id": remote_id,
+                "owner_id": owner_id,
             },
         )
         if not rows:
@@ -169,6 +174,7 @@ class OpenNotebookBundleStore:
         row = rows[0]
         return ExternalMapping(
             id=str(row["id"]),
+            owner_id=row.get("owner_id") or DEFAULT_OWNER_ID,
             remote_type=row["remote_type"],
             remote_id=row["remote_id"],
             remote_parent_id=row.get("remote_parent_id"),
@@ -187,8 +193,10 @@ class OpenNotebookBundleStore:
     ) -> None:
         from open_notebook.database.repository import repo_create, repo_update
 
+        owner_id = get_current_owner_id() or DEFAULT_OWNER_ID
         data = {
             "provider": PROVIDER,
+            "owner_id": owner_id,
             "remote_type": remote_type,
             "remote_id": remote_id,
             "remote_parent_id": remote_parent_id,
