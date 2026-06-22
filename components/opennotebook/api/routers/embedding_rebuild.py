@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from surreal_commands import get_command_status
 
+from api.auth import get_request_user
 from api.command_service import CommandService
 from api.models import (
     RebuildProgress,
@@ -10,13 +11,17 @@ from api.models import (
     RebuildStats,
     RebuildStatusResponse,
 )
+from open_notebook.auth_context import DEFAULT_OWNER_ID, AuthenticatedUser
 from open_notebook.database.repository import repo_query
 
 router = APIRouter()
 
 
 @router.post("/rebuild", response_model=RebuildResponse)
-async def start_rebuild(request: RebuildRequest):
+async def start_rebuild(
+    request: RebuildRequest,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """
     Start a background job to rebuild embeddings.
 
@@ -36,6 +41,10 @@ async def start_rebuild(request: RebuildRequest):
         # Estimate total items (quick count query)
         # This is a rough estimate before the command runs
         total_estimate = 0
+        owner_vars = {
+            "owner_id": current_user.owner_id,
+            "owner_is_default": current_user.owner_id == DEFAULT_OWNER_ID,
+        }
 
         if request.include_sources:
             if request.mode == "existing":
@@ -45,14 +54,30 @@ async def start_rebuild(request: RebuildRequest):
                     SELECT VALUE count(array::distinct(
                         SELECT VALUE source.id
                         FROM source_embedding
-                        WHERE embedding != none AND array::len(embedding) > 0
+                        WHERE embedding != none
+                        AND array::len(embedding) > 0
+                        AND (
+                            source.owner_id = $owner_id
+                            OR ($owner_is_default AND source.owner_id = NONE)
+                        )
                     )) as count FROM {}
-                    """
+                    """,
+                    owner_vars,
                 )
             else:
                 # Count all sources with content
                 result = await repo_query(
-                    "SELECT VALUE count() as count FROM source WHERE full_text != none GROUP ALL"
+                    """
+                    SELECT VALUE count() as count
+                    FROM source
+                    WHERE full_text != none
+                    AND (
+                        owner_id = $owner_id
+                        OR ($owner_is_default AND owner_id = NONE)
+                    )
+                    GROUP ALL
+                    """,
+                    owner_vars,
                 )
 
             if result and isinstance(result[0], dict):
@@ -63,11 +88,32 @@ async def start_rebuild(request: RebuildRequest):
         if request.include_notes:
             if request.mode == "existing":
                 result = await repo_query(
-                    "SELECT VALUE count() as count FROM note WHERE embedding != none AND array::len(embedding) > 0 GROUP ALL"
+                    """
+                    SELECT VALUE count() as count
+                    FROM note
+                    WHERE embedding != none
+                    AND array::len(embedding) > 0
+                    AND (
+                        owner_id = $owner_id
+                        OR ($owner_is_default AND owner_id = NONE)
+                    )
+                    GROUP ALL
+                    """,
+                    owner_vars,
                 )
             else:
                 result = await repo_query(
-                    "SELECT VALUE count() as count FROM note WHERE content != none GROUP ALL"
+                    """
+                    SELECT VALUE count() as count
+                    FROM note
+                    WHERE content != none
+                    AND (
+                        owner_id = $owner_id
+                        OR ($owner_is_default AND owner_id = NONE)
+                    )
+                    GROUP ALL
+                    """,
+                    owner_vars,
                 )
 
             if result and isinstance(result[0], dict):
@@ -78,11 +124,31 @@ async def start_rebuild(request: RebuildRequest):
         if request.include_insights:
             if request.mode == "existing":
                 result = await repo_query(
-                    "SELECT VALUE count() as count FROM source_insight WHERE embedding != none AND array::len(embedding) > 0 GROUP ALL"
+                    """
+                    SELECT VALUE count() as count
+                    FROM source_insight
+                    WHERE embedding != none
+                    AND array::len(embedding) > 0
+                    AND (
+                        source.owner_id = $owner_id
+                        OR ($owner_is_default AND source.owner_id = NONE)
+                    )
+                    GROUP ALL
+                    """,
+                    owner_vars,
                 )
             else:
                 result = await repo_query(
-                    "SELECT VALUE count() as count FROM source_insight GROUP ALL"
+                    """
+                    SELECT VALUE count() as count
+                    FROM source_insight
+                    WHERE (
+                        source.owner_id = $owner_id
+                        OR ($owner_is_default AND source.owner_id = NONE)
+                    )
+                    GROUP ALL
+                    """,
+                    owner_vars,
                 )
 
             if result and isinstance(result[0], dict):
@@ -101,6 +167,7 @@ async def start_rebuild(request: RebuildRequest):
                 "include_sources": request.include_sources,
                 "include_notes": request.include_notes,
                 "include_insights": request.include_insights,
+                "owner_id": current_user.owner_id,
             },
         )
 

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from surreal_commands import CommandInput, CommandOutput, command, submit_command
 
 from open_notebook.ai.models import model_manager
+from open_notebook.auth_context import DEFAULT_OWNER_ID
 from open_notebook.database.repository import ensure_record_id, repo_insert, repo_query
 from open_notebook.domain.notebook import Note, Source, SourceInsight
 from open_notebook.exceptions import ConfigurationError
@@ -36,6 +37,7 @@ class RebuildEmbeddingsInput(CommandInput):
     include_sources: bool = True
     include_notes: bool = True
     include_insights: bool = True
+    owner_id: Optional[str] = None
 
 
 class RebuildEmbeddingsOutput(CommandOutput):
@@ -827,6 +829,7 @@ async def collect_items_for_rebuild(
     include_sources: bool,
     include_notes: bool,
     include_insights: bool,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, List[str]]:
     """
     Collect items to rebuild based on mode and include flags.
@@ -835,18 +838,32 @@ async def collect_items_for_rebuild(
         Dict with keys: 'sources', 'notes', 'insights' containing lists of item IDs
     """
     items: Dict[str, List[str]] = {"sources": [], "notes": [], "insights": []}
+    owner_vars = {
+        "owner_id": owner_id,
+        "owner_is_default": owner_id == DEFAULT_OWNER_ID,
+    }
+
+    def owner_clause(field: str = "owner_id") -> str:
+        if not owner_id:
+            return ""
+        return (
+            f" AND ({field} = $owner_id "
+            f"OR ($owner_is_default AND {field} = NONE))"
+        )
 
     if include_sources:
         if mode == "existing":
             # Query sources with embeddings (via source_embedding table)
             result = await repo_query(
-                """
+                f"""
                 RETURN array::distinct(
                     SELECT VALUE source.id
                     FROM source_embedding
                     WHERE embedding != none AND array::len(embedding) > 0
+                    {owner_clause("source.owner_id")}
                 )
-                """
+                """,
+                owner_vars if owner_id else None,
             )
             # RETURN returns the array directly as the result (not nested)
             if result:
@@ -856,7 +873,13 @@ async def collect_items_for_rebuild(
         else:  # mode == "all"
             # Query all sources with non-empty content
             result = await repo_query(
-                "SELECT id FROM source WHERE full_text != none AND string::trim(full_text) != ''"
+                f"""
+                SELECT id FROM source
+                WHERE full_text != none
+                AND string::trim(full_text) != ''
+                {owner_clause()}
+                """,
+                owner_vars if owner_id else None,
             )
             items["sources"] = [str(item["id"]) for item in result] if result else []
 
@@ -866,12 +889,24 @@ async def collect_items_for_rebuild(
         if mode == "existing":
             # Query notes with embeddings
             result = await repo_query(
-                "SELECT id FROM note WHERE embedding != none AND array::len(embedding) > 0"
+                f"""
+                SELECT id FROM note
+                WHERE embedding != none
+                AND array::len(embedding) > 0
+                {owner_clause()}
+                """,
+                owner_vars if owner_id else None,
             )
         else:  # mode == "all"
             # Query all notes with non-empty content
             result = await repo_query(
-                "SELECT id FROM note WHERE content != none AND string::trim(content) != ''"
+                f"""
+                SELECT id FROM note
+                WHERE content != none
+                AND string::trim(content) != ''
+                {owner_clause()}
+                """,
+                owner_vars if owner_id else None,
             )
 
         items["notes"] = [str(item["id"]) for item in result] if result else []
@@ -881,12 +916,24 @@ async def collect_items_for_rebuild(
         if mode == "existing":
             # Query insights with embeddings
             result = await repo_query(
-                "SELECT id FROM source_insight WHERE embedding != none AND array::len(embedding) > 0"
+                f"""
+                SELECT id FROM source_insight
+                WHERE embedding != none
+                AND array::len(embedding) > 0
+                {owner_clause("source.owner_id")}
+                """,
+                owner_vars if owner_id else None,
             )
         else:  # mode == "all"
             # Query all insights with non-empty content
             result = await repo_query(
-                "SELECT id FROM source_insight WHERE content != none AND string::trim(content) != ''"
+                f"""
+                SELECT id FROM source_insight
+                WHERE content != none
+                AND string::trim(content) != ''
+                {owner_clause("source.owner_id")}
+                """,
+                owner_vars if owner_id else None,
             )
 
         items["insights"] = [str(item["id"]) for item in result] if result else []
@@ -940,6 +987,7 @@ async def rebuild_embeddings_command(
             input_data.include_sources,
             input_data.include_notes,
             input_data.include_insights,
+            input_data.owner_id,
         )
 
         total_items = (
