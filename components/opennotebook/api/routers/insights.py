@@ -1,15 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
+from api.auth import ensure_user_owns, get_request_user
 from api.models import NoteResponse, SaveAsNoteRequest, SourceInsightResponse
-from open_notebook.domain.notebook import SourceInsight
+from open_notebook.auth_context import AuthenticatedUser
+from open_notebook.domain.notebook import Notebook, SourceInsight
 from open_notebook.exceptions import InvalidInputError
 
 router = APIRouter()
 
 
 @router.get("/insights/{insight_id}", response_model=SourceInsightResponse)
-async def get_insight(insight_id: str):
+async def get_insight(
+    insight_id: str,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Get a specific insight by ID."""
     try:
         insight = await SourceInsight.get(insight_id)
@@ -18,6 +23,7 @@ async def get_insight(insight_id: str):
 
         # Get source ID from the insight relationship
         source = await insight.get_source()
+        ensure_user_owns(source, current_user)
 
         return SourceInsightResponse(
             id=insight.id or "",
@@ -35,12 +41,18 @@ async def get_insight(insight_id: str):
 
 
 @router.delete("/insights/{insight_id}")
-async def delete_insight(insight_id: str):
+async def delete_insight(
+    insight_id: str,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Delete a specific insight."""
     try:
         insight = await SourceInsight.get(insight_id)
         if not insight:
             raise HTTPException(status_code=404, detail="Insight not found")
+
+        source = await insight.get_source()
+        ensure_user_owns(source, current_user)
 
         await insight.delete()
 
@@ -53,12 +65,22 @@ async def delete_insight(insight_id: str):
 
 
 @router.post("/insights/{insight_id}/save-as-note", response_model=NoteResponse)
-async def save_insight_as_note(insight_id: str, request: SaveAsNoteRequest):
+async def save_insight_as_note(
+    insight_id: str,
+    request: SaveAsNoteRequest,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Convert an insight to a note."""
     try:
         insight = await SourceInsight.get(insight_id)
         if not insight:
             raise HTTPException(status_code=404, detail="Insight not found")
+
+        source = await insight.get_source()
+        ensure_user_owns(source, current_user)
+        if request.notebook_id:
+            notebook = await Notebook.get(request.notebook_id)
+            ensure_user_owns(notebook, current_user)
 
         # Use the existing save_as_note method from the domain model
         note = await insight.save_as_note(request.notebook_id)

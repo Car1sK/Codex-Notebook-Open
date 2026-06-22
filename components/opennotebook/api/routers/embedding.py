@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
+from api.auth import ensure_user_owns, get_request_user
 from api.command_service import CommandService
 from api.models import EmbedRequest, EmbedResponse
 from open_notebook.ai.models import model_manager
+from open_notebook.auth_context import AuthenticatedUser
 from open_notebook.domain.notebook import Note, Source
 from open_notebook.exceptions import NotFoundError
 
@@ -11,7 +13,10 @@ router = APIRouter()
 
 
 @router.post("/embed", response_model=EmbedResponse)
-async def embed_content(embed_request: EmbedRequest):
+async def embed_content(
+    embed_request: EmbedRequest,
+    current_user: AuthenticatedUser = Depends(get_request_user),
+):
     """Embed content for vector search."""
     try:
         # Check if embedding model is available
@@ -29,6 +34,12 @@ async def embed_content(embed_request: EmbedRequest):
             raise HTTPException(
                 status_code=400, detail="Item type must be either 'source' or 'note'"
             )
+
+        if item_type == "source":
+            item = await Source.get(item_id)
+        else:
+            item = await Note.get(item_id)
+        ensure_user_owns(item, current_user)
 
         # Branch based on processing mode
         if embed_request.async_processing:
@@ -78,17 +89,13 @@ async def embed_content(embed_request: EmbedRequest):
 
             # Get the item and submit embedding job
             if item_type == "source":
-                source_item = await Source.get(item_id)
-
                 # Submit embed_source job (returns command_id for tracking)
-                command_id = await source_item.vectorize()
+                command_id = await item.vectorize()
                 message = "Source embedding job submitted"
 
             elif item_type == "note":
-                note_item = await Note.get(item_id)
-
                 # Note.save() internally submits embed_note command and returns command_id
-                command_id = await note_item.save()
+                command_id = await item.save()
                 message = "Note embedding job submitted"
 
             return EmbedResponse(
