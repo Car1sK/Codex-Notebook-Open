@@ -10,17 +10,13 @@ ROOT_TEXT_SUFFIXES = {".bat", ".md", ".ps1", ".sh"}
 ROOT_TEXT_NAMES = {".gitignore", "LICENSE"}
 SCRIPT_TEXT_SUFFIXES = {".py", ".ps1"}
 
+# Only U+FFFD (replacement character) is a universal encoding-error indicator.
+# Additional CJK-specific mojibake patterns are caught by check_readmes(),
+# which validates that expected readable Chinese strings are present.
+# The ad-hoc CJK codepoints previously listed here were real CJK characters
+# that could cause false positives in legitimate Chinese text.
 MOJIBAKE_MARKERS = [
-    chr(codepoint)
-    for codepoint in (
-        0xFFFD,  # replacement character
-        0x6D93,
-        0x93C4,
-        0x951B,
-        0x9225,
-        0x625C,
-        0x629C,
-    )
+    "\ufffd",  # replacement character, appears when bytes can't be decoded as UTF-8
 ]
 
 REQUIRED_GITIGNORE_LINES = [
