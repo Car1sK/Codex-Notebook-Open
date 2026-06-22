@@ -3,10 +3,11 @@ import traceback
 from typing import Dict, List, Optional
 
 from esperanto import AIFactory
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
 
+from api.auth import require_default_owner_user
 from api.models import (
     DefaultModelsResponse,
     ModelCreate,
@@ -195,7 +196,10 @@ async def get_models(
 
 
 @router.post("/models", response_model=ModelResponse)
-async def create_model(model_data: ModelCreate):
+async def create_model(
+    model_data: ModelCreate,
+    _admin=Depends(require_default_owner_user),
+):
     """Create a new model configuration."""
     try:
         # Validate model type
@@ -250,7 +254,10 @@ async def create_model(model_data: ModelCreate):
 
 
 @router.delete("/models/{model_id}")
-async def delete_model(model_id: str):
+async def delete_model(
+    model_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Delete a model configuration."""
     try:
         model = await Model.get(model_id)
@@ -268,7 +275,10 @@ async def delete_model(model_id: str):
 
 
 @router.post("/models/{model_id}/test", response_model=ModelTestResponse)
-async def test_model(model_id: str):
+async def test_model(
+    model_id: str,
+    _admin=Depends(require_default_owner_user),
+):
     """Test if a specific model is correctly configured and functional."""
     try:
         model = await Model.get(model_id)
@@ -313,7 +323,10 @@ async def get_default_models():
 
 
 @router.put("/models/defaults", response_model=DefaultModelsResponse)
-async def update_default_models(defaults_data: DefaultModelsResponse):
+async def update_default_models(
+    defaults_data: DefaultModelsResponse,
+    _admin=Depends(require_default_owner_user),
+):
     """Update default model assignments."""
     try:
         defaults = await DefaultModels.get_instance()
@@ -491,7 +504,10 @@ async def get_provider_availability():
 @router.get(
     "/models/discover/{provider}", response_model=List[DiscoveredModelResponse]
 )
-async def discover_models(provider: str):
+async def discover_models(
+    provider: str,
+    _admin=Depends(require_default_owner_user),
+):
     """
     Discover available models from a provider without registering them.
 
@@ -520,7 +536,10 @@ async def discover_models(provider: str):
 
 
 @router.post("/models/sync/{provider}", response_model=ProviderSyncResponse)
-async def sync_models(provider: str):
+async def sync_models(
+    provider: str,
+    _admin=Depends(require_default_owner_user),
+):
     """
     Sync models for a specific provider.
 
@@ -547,7 +566,9 @@ async def sync_models(provider: str):
 
 
 @router.post("/models/sync", response_model=AllProvidersSyncResponse)
-async def sync_all_models():
+async def sync_all_models(
+    _admin=Depends(require_default_owner_user),
+):
     """
     Sync models for all configured providers.
 
@@ -686,7 +707,9 @@ def _get_preferred_model(
 
 
 @router.post("/models/auto-assign", response_model=AutoAssignResult)
-async def auto_assign_defaults():
+async def auto_assign_defaults(
+    _admin=Depends(require_default_owner_user),
+):
     """
     Auto-assign default models based on available models.
 

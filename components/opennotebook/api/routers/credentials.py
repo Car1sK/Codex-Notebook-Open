@@ -20,10 +20,11 @@ NEVER returns actual API key values - only metadata.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import SecretStr
 
+from api.auth import require_default_owner_user
 from api.credentials_service import (
     credential_to_response,
     discover_with_config,
@@ -58,7 +59,11 @@ from open_notebook.database.repository import ensure_record_id, repo_delete, rep
 from open_notebook.domain.credential import Credential
 from open_notebook.exceptions import NotFoundError
 
-router = APIRouter(prefix="/credentials", tags=["credentials"])
+router = APIRouter(
+    prefix="/credentials",
+    tags=["credentials"],
+    dependencies=[Depends(require_default_owner_user)],
+)
 
 
 def _handle_value_error(e: ValueError, status_code: int = 400) -> HTTPException:

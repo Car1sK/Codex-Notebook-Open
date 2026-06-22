@@ -315,6 +315,16 @@ def get_request_user(request: Request) -> AuthenticatedUser:
     return AuthenticatedUser(username=DEFAULT_OWNER_ID, owner_id=DEFAULT_OWNER_ID)
 
 
+def require_default_owner_user(request: Request) -> AuthenticatedUser:
+    user = get_request_user(request)
+    if user.owner_id != DEFAULT_OWNER_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is restricted to the default administrator account",
+        )
+    return user
+
+
 def record_owner_id(record: Any) -> Optional[str]:
     if isinstance(record, dict):
         return record.get("owner_id")
